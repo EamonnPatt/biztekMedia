@@ -1,0 +1,5 @@
+# biztekmedia.ca sits inside another site's folder (an addon domain), so that site's
+# WordPress rewrite rules would otherwise apply here too and turn every missing page into
+# a 500 error. This site needs no rewriting: switch it off and serve index.html as the home page.
+RewriteEngine Off
+DirectoryIndex index.html

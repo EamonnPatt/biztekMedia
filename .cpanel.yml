@@ -1,12 +1,13 @@
 ---
 # cPanel → Git Version Control runs these steps on "Deploy HEAD Commit".
-# The repo lives in /home/rcfwp52q6knr/repositories/biztekMedia (outside the website);
-# these steps copy the site into public_html and the code into biztek-private.
-# They never touch config.php, uploaded files, or anything else already in public_html.
+# The repo lives in /home/rcfwp52q6knr/repositories/biztekMedia (outside every website).
+# biztekmedia.ca is an addon domain, so its site folder is public_html/biztekmedia.ca.
+# These steps never touch config.php, uploaded files, or the other sites on this account.
 deployment:
   tasks:
     - export HOMEDIR=/home/rcfwp52q6knr
-    - /bin/mkdir -p $HOMEDIR/public_html $HOMEDIR/biztek-private
-    - /bin/cp -R public_html/. $HOMEDIR/public_html/
+    - export SITEDIR=/home/rcfwp52q6knr/public_html/biztekmedia.ca
+    - /bin/mkdir -p $SITEDIR $HOMEDIR/biztek-private
+    - /bin/cp -R public_html/. $SITEDIR/
     - /bin/cp -R biztek-private/lib $HOMEDIR/biztek-private/
     - /bin/cp biztek-private/.htaccess biztek-private/config.sample.php $HOMEDIR/biztek-private/
