@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Biztek Media — Gym Screen Advertising</title>
+  <meta name="description" content="Put your video, image or text ad on the screens inside the gym. Build it yourself, see the price live, and pay online.">
+  <meta name="theme-color" content="#F4EEE3">
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>document.documentElement.classList.add('js')</script>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" id="nav">
+    <a class="brand" href="./" aria-label="Biztek Media home">
+      <img src="img/logo.svg" alt="" width="36" height="36">
+      <span class="wordmark">BIZTEK<span>MEDIA</span></span>
+    </a>
+    <nav class="nav-links" id="navLinks" aria-label="Primary">
+      <a href="#formats">Formats</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#zones">Zones</a>
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn btn-ink nav-cta" href="editor.html">Build your ad <span aria-hidden="true">→</span></a>
+    <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navLinks" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </header>
+
+  <main id="main">
+    <!-- ============================== HERO -->
+    <section class="hero">
+      <div class="hero-band" aria-hidden="true"></div>
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> In-gym screen advertising</p>
+        <h1 class="display">Be seen<br>between<br><span class="hl">sets.</span></h1>
+        <p class="lede">Put your video, image or text ad on the screens members watch on the treadmill, at the front desk and between sets. Build it yourself in minutes and see the price update with every change.</p>
+        <div class="cta-row">
+          <a class="btn btn-orange btn-lg" href="editor.html">Open the ad studio <span aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost btn-lg" href="#pricing">See pricing</a>
+        </div>
+        <ul class="hero-facts">
+          <li><b>10–60s</b><span>spot lengths</span></li>
+          <li><b data-fact="from">$15</b><span>per week, from</span></li>
+          <li><b data-fact="zones">6</b><span>screen zones</span></li>
+        </ul>
+      </div>
+
+      <div class="hero-visual" aria-label="Example ads playing on a gym screen">
+        <img class="hero-orb" src="img/logo.svg" alt="">
+        <div class="tv">
+          <div class="tv-screen" id="tvScreen">
+            <!-- Sample ads, for illustration only -->
+            <div class="slide slide-video is-active" data-len="15">
+              <div class="sv-blobs" aria-hidden="true"><i></i><i></i><i></i></div>
+              <p class="sv-brand">FUEL KITCHEN</p>
+              <p class="sv-head">Post-workout<br>bowls <em>2&#8209;for&#8209;1</em></p>
+              <p class="sv-sub">Tues &amp; Thurs · right next door</p>
+              <span class="slide-tag">VIDEO · 15s</span>
+            </div>
+            <div class="slide slide-image" data-len="10">
+              <div class="si-photo" aria-hidden="true"><i></i><i></i></div>
+              <div class="si-copy">
+                <p class="si-brand">PEAK PHYSIO</p>
+                <p class="si-head">Sore?<br>Book a sports massage.</p>
+                <div class="si-qr" aria-hidden="true"></div>
+              </div>
+              <span class="slide-tag">IMAGE · 10s</span>
+            </div>
+            <div class="slide slide-text" data-len="10">
+              <p class="st-head">Now hiring<br>personal<br>trainers</p>
+              <p class="st-sub">Ask at the front desk →</p>
+              <span class="slide-tag">TEXT · 10s</span>
+            </div>
+            <div class="tv-progress" aria-hidden="true"><span id="tvProgress"></span></div>
+          </div>
+          <div class="tv-glare" aria-hidden="true"></div>
+        </div>
+        <p class="tv-caption"><span class="rec" aria-hidden="true"></span> NOW PLAYING · CARDIO DECK · SCREEN 3</p>
+      </div>
+    </section>
+
+    <!-- ============================== MARQUEE -->
+    <div class="marquee-wrap" aria-hidden="true">
+      <div class="marquee marquee--back"><div class="marquee-track">
+        <span>SWEAT EQUITY ✺ LOCAL REACH ✺ REAL ATTENTION ✺ SWEAT EQUITY ✺ LOCAL REACH ✺ REAL ATTENTION ✺ </span>
+        <span>SWEAT EQUITY ✺ LOCAL REACH ✺ REAL ATTENTION ✺ SWEAT EQUITY ✺ LOCAL REACH ✺ REAL ATTENTION ✺ </span>
+      </div></div>
+      <div class="marquee marquee--front"><div class="marquee-track">
+        <span>VIDEO ✺ IMAGE ✺ TEXT ✺ 10–60 SECONDS ✺ LIVE PRICING ✺ PAY ONLINE ✺ </span>
+        <span>VIDEO ✺ IMAGE ✺ TEXT ✺ 10–60 SECONDS ✺ LIVE PRICING ✺ PAY ONLINE ✺ </span>
+      </div></div>
+    </div>
+
+    <!-- ============================== WHY -->
+    <section class="section why">
+      <div class="why-head reveal">
+        <p class="kicker">Why the gym</p>
+        <h2 class="display-2">Attention you<br>can't scroll past.</h2>
+      </div>
+      <div class="why-grid">
+        <article class="why-card reveal">
+          <span class="why-num">A</span>
+          <h3>Captive, not scrolling</h3>
+          <p>Someone on a treadmill faces the same screen for their whole session. They can't swipe past it or skip it.</p>
+        </article>
+        <article class="why-card reveal">
+          <span class="why-num">B</span>
+          <h3>Repeat by default</h3>
+          <p>Regulars come back several times a week, so people remember your ad without you paying for extra reach.</p>
+        </article>
+        <article class="why-card reveal">
+          <span class="why-num">C</span>
+          <h3>Local and intentional</h3>
+          <p>Health-minded people who live and work nearby. A natural fit for food, physio, apparel, trades and local services.</p>
+        </article>
+      </div>
+      <dl class="why-stats reveal">
+        <div><dt>Screen zones</dt><dd data-fact="zones">6</dd></div>
+        <div><dt>Screens</dt><dd data-fact="screens">11</dd></div>
+        <div><dt>Hours on air / day</dt><dd>18</dd></div>
+        <div><dt>Spot lengths</dt><dd>10–60<small>s</small></dd></div>
+      </dl>
+    </section>
+
+    <!-- ============================== FORMATS -->
+    <section class="section formats" id="formats">
+      <div class="formats-head">
+        <div class="reveal">
+          <p class="kicker">01 — Formats</p>
+          <h2 class="display-2">Three ways<br>to show up.</h2>
+        </div>
+        <div class="length-control reveal">
+          <div class="length-label">
+            <span>Spot length</span>
+            <output id="lenOut" for="lenRange">15s</output>
+          </div>
+          <input type="range" id="lenRange" min="10" max="60" step="1" value="15" aria-label="Spot length in seconds">
+          <div class="length-chips" id="lenChips">
+            <button type="button" data-len="10">10s</button>
+            <button type="button" data-len="15" class="is-on">15s</button>
+            <button type="button" data-len="20">20s</button>
+            <button type="button" data-len="30">30s</button>
+            <button type="button" data-len="45">45s</button>
+            <button type="button" data-len="60">60s</button>
+          </div>
+          <p class="length-note">Drag to see the weekly price per zone at standard rotation (4 plays an hour).</p>
+        </div>
+      </div>
+
+      <div class="format-grid">
+        <article class="fcard fcard--video reveal" data-format="video">
+          <div class="fcard-top">
+            <span class="fcard-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg></span>
+            <span class="fcard-tag">Most eye-catching</span>
+          </div>
+          <h3>Video</h3>
+          <p>Motion grabs attention. Upload a clip, trim it, then layer your offer and logo on top.</p>
+          <div class="fcard-price"><span class="amt" data-price>$0.00</span><span class="per">/ week<br>per zone</span></div>
+          <p class="fcard-sec" data-persec></p>
+          <ul class="fcard-list">
+            <li>MP4, WEBM or MOV up to 250&nbsp;MB</li>
+            <li>Trim, loop and overlay text</li>
+            <li>Optional audio add-on</li>
+          </ul>
+          <a class="btn btn-cream" href="editor.html?start=video">Start a video ad <span aria-hidden="true">→</span></a>
+        </article>
+
+        <article class="fcard fcard--image reveal" data-format="image">
+          <div class="fcard-top">
+            <span class="fcard-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 17l5-6 4 4 2-2 3 4z"/><circle cx="16" cy="9" r="1.8"/></svg></span>
+            <span class="fcard-tag">Best value</span>
+          </div>
+          <h3>Image</h3>
+          <p>A strong still, a clear offer and a QR code. Add motion with animated text and shapes.</p>
+          <div class="fcard-price"><span class="amt" data-price>$0.00</span><span class="per">/ week<br>per zone</span></div>
+          <p class="fcard-sec" data-persec></p>
+          <ul class="fcard-list">
+            <li>JPG, PNG, WEBP or GIF</li>
+            <li>Animated text and badges</li>
+            <li>Built-in QR code maker</li>
+          </ul>
+          <a class="btn btn-ink" href="editor.html?start=image">Start an image ad <span aria-hidden="true">→</span></a>
+        </article>
+
+        <article class="fcard fcard--text reveal" data-format="text">
+          <div class="fcard-top">
+            <span class="fcard-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v3h-2V7h-5v11h2v2H9v-2h2V7H6v1H4z"/></svg></span>
+            <span class="fcard-tag">Fastest to launch</span>
+          </div>
+          <h3>Text</h3>
+          <p>No files needed. Bold type, brand colours and simple motion. Live in minutes.</p>
+          <div class="fcard-price"><span class="amt" data-price>$0.00</span><span class="per">/ week<br>per zone</span></div>
+          <p class="fcard-sec" data-persec></p>
+          <ul class="fcard-list">
+            <li>Just type</li>
+            <li>Templates to start from</li>
+            <li>Shapes, colours, animation</li>
+          </ul>
+          <a class="btn btn-orange" href="editor.html?start=text">Start a text ad <span aria-hidden="true">→</span></a>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============================== PRICING -->
+    <section class="section pricing" id="pricing">
+      <div class="pricing-head reveal">
+        <p class="kicker">02 — Pricing</p>
+        <h2 class="display-2">No quotes.<br>No sales calls.</h2>
+        <p class="lede">Your price is built from six choices. The ad studio shows the total live as you edit, and it's exactly what you pay at checkout.</p>
+      </div>
+
+      <div class="stack" id="priceStack"><!-- rendered from pricing.js --></div>
+
+      <div class="pricing-foot">
+        <div class="addons reveal">
+          <h3>Add-ons</h3>
+          <ul id="addonList"></ul>
+        </div>
+        <div class="receipt-shadow reveal"><div class="receipt" id="exampleReceipt" aria-label="Example order"></div></div>
+      </div>
+    </section>
+
+    <!-- ============================== ZONES -->
+    <section class="section zones" id="zones">
+      <div class="zones-head reveal">
+        <p class="kicker">03 — Zones</p>
+        <h2 class="display-2">Pick your<br>spot on the floor.</h2>
+        <p class="lede">Each zone has its own screens and its own kind of attention. Higher-traffic zones carry more weight in the price. Book every zone and the zone total drops <b data-fact="bundle">15%</b>.</p>
+      </div>
+      <div class="floorplan reveal" id="floorplan"><!-- rendered from pricing.js --></div>
+    </section>
+
+    <!-- ============================== HOW -->
+    <section class="section how" id="how">
+      <div class="reveal">
+        <p class="kicker">04 — How it works</p>
+        <h2 class="display-2">Four steps.<br>No meetings.</h2>
+      </div>
+      <ol class="steps">
+        <li class="step reveal">
+          <span class="step-num">01</span>
+          <h3>Build</h3>
+          <p>Upload a video or image, or just type. Drag, resize, animate and time every layer in the studio.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num">02</span>
+          <h3>Schedule</h3>
+          <p>Choose screen zones, how often it plays, the time of day and how many weeks it runs.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num">03</span>
+          <h3>Pay</h3>
+          <p>Check out securely with Helcim. The total you see while editing is the total you pay.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step-num">04</span>
+          <h3>Go live</h3>
+          <p>We review your ad within 48 hours, or 24 with rush approval. It starts playing on your start date.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============================== FAQ -->
+    <section class="section faq" id="faq">
+      <div class="reveal">
+        <p class="kicker">05 — FAQ</p>
+        <h2 class="display-2">Good<br>questions.</h2>
+      </div>
+      <div class="faq-list">
+        <details class="reveal">
+          <summary>What files can I upload?</summary>
+          <p>Video: MP4, WEBM or MOV up to 250&nbsp;MB. MP4 with H.264 is the safest choice. Images: JPG, PNG, WEBP or GIF. Screens are 1920×1080 landscape, and you can also design in 1080×1920 portrait.</p>
+        </details>
+        <details class="reveal">
+          <summary>Which ad type am I charged for?</summary>
+          <p>The studio charges for the richest media in your ad. Any video layer bills at the video rate, any image at the image rate, and text and shapes on their own bill at the text rate. The live price shows which rate applies.</p>
+        </details>
+        <details class="reveal">
+          <summary>What does “plays per hour” mean?</summary>
+          <p>It's how many times your spot runs on each booked screen in an hour. Standard is 4, so roughly once every 15 minutes. The live quote also shows your total plays and your cost per 1,000 plays.</p>
+        </details>
+        <details class="reveal">
+          <summary>Do the screens play sound?</summary>
+          <p>Screens are muted by default. Add “Audio on” to a video ad and it plays with sound in zones that have speakers.</p>
+        </details>
+        <details class="reveal">
+          <summary>What won't you run?</summary>
+          <p>Every ad is reviewed before it airs. We don't run tobacco, vaping, cannabis, alcohol, gambling, adult content, misleading health claims or other gyms. If we can't run your ad, we'll work with you to fix it or refund you.</p>
+        </details>
+        <details class="reveal">
+          <summary>Is payment secure?</summary>
+          <p>Payments go through Helcim's secure checkout. Your card details go straight to Helcim and never touch our servers.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- ============================== CTA -->
+    <section class="cta-band">
+      <img class="cta-orb" src="img/logo.svg" alt="">
+      <div class="cta-inner reveal">
+        <h2 class="display-2">Your ad could be<br>on screen next week.</h2>
+        <a class="btn btn-ink btn-lg" href="editor.html">Open the ad studio <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-top">
+      <a class="brand brand--light" href="./">
+        <img src="img/logo.svg" alt="" width="36" height="36">
+        <span class="wordmark">BIZTEK<span>MEDIA</span></span>
+      </a>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="#formats">Formats</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#zones">Zones</a>
+        <a href="#faq">FAQ</a>
+        <a href="editor.html">Ad studio</a>
+      </nav>
+    </div>
+    <p class="footer-giant" aria-hidden="true">BIZTEK MEDIA</p>
+    <div class="footer-bottom">
+      <span>© <span id="year">2026</span> Biztek Media</span>
+      <span>Payments processed securely by Helcim</span>
+    </div>
+  </footer>
+
+  <script src="js/pricing.js"></script>
+  <script src="js/site.js"></script>
+</body>
+</html>

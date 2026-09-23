@@ -1,0 +1,4 @@
+# This folder belongs next to public_html, not inside it.
+# If it ever ends up inside, this stops anyone from opening or downloading its files.
+Require all denied
+Deny from all

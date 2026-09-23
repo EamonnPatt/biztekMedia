@@ -1,0 +1,11 @@
+---
+# cPanel → Git Version Control runs these steps on "Deploy HEAD Commit".
+# It copies the site into place without touching config.php, uploaded files, or anything
+# else already in public_html. If a step fails, replace $HOME with your full home path
+# (shown as "Home Directory" in cPanel's sidebar), e.g. /home/abc123.
+deployment:
+  tasks:
+    - /bin/mkdir -p $HOME/public_html $HOME/biztek-private
+    - /bin/cp -R public_html/. $HOME/public_html/
+    - /bin/cp -R biztek-private/lib $HOME/biztek-private/
+    - /bin/cp biztek-private/.htaccess biztek-private/config.sample.php $HOME/biztek-private/
