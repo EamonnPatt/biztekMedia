@@ -307,6 +307,7 @@ function api_confirm(): never
     }
     bz_db()->prepare("UPDATE `$table` SET secret_token = NULL WHERE id = ?")->execute([$order['id']]);
     notify_new_order($order);
+    send_order_receipt($order);
     bz_json(200, ['ok' => true, 'orderId' => $order['id'], 'transactionId' => $order['transaction']['transactionId']]);
 }
 
@@ -319,6 +320,7 @@ function api_demo_confirm(): never
         $order['paidAt'] = gmdate('c');
         save_order_status($order, 'paid-demo', null);
         notify_new_order($order);
+        send_order_receipt($order);
     }
     bz_json(200, ['ok' => true, 'orderId' => $order['id'], 'transactionId' => 'DEMO']);
 }
@@ -443,8 +445,6 @@ function notify_new_order(array $order): void
     $to = trim((string) bz_config()['notify_email']);
     if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
 
-    $host = preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
-    $from = trim((string) bz_config()['from_email']) ?: 'no-reply@' . $host;
     $p = bz_pricing()->config;
     $c = $order['contact'];
     $k = $order['campaign'];
@@ -462,9 +462,84 @@ function notify_new_order(array $order): void
         . "Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']}s\nFiles:\n$files\n\n"
         . "Review it: " . bz_site_url() . "/admin.php\n";
 
-    $subject = "New ad order {$order['id']} from {$c['business']}$demo";
-    $headers = "From: Biztek Media <$from>\r\nReply-To: {$c['email']}\r\nContent-Type: text/plain; charset=UTF-8";
-    if (!@mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers)) {
+    if (!bz_mail($to, "New ad order {$order['id']} from {$c['business']}$demo", $body, $c['email'])) {
         error_log("[biztek] could not send the order email for {$order['id']}");
     }
+}
+
+// Emails the advertiser a receipt with the details of their order. Failures never block the order:
+// the payment is already saved by the time this runs.
+function send_order_receipt(array $order): void
+{
+    try {
+        $email = (string) ($order['contact']['email'] ?? '');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return;
+        $subject = ($order['demo'] ? '[TEST] ' : '') . "Your Biztek Media order {$order['id']}";
+        if (!bz_mail($email, $subject, order_receipt_text($order))) {
+            error_log("[biztek] could not send the receipt for {$order['id']}");
+        }
+    } catch (Throwable $e) {
+        error_log("[biztek] could not build the receipt for {$order['id']}: $e");
+    }
+}
+
+function order_receipt_text(array $order): string
+{
+    $p = bz_pricing()->config;
+    $c = $order['contact'];
+    $k = $order['campaign'];
+    $q = $order['quote'];
+    $t = $order['transaction'] ?? [];
+    $money = fn($n) => Pricing::money((float) $n);
+    $tz = new DateTimeZone(bz_config()['timezone'] ?: 'UTC');
+    $paidOn = (new DateTimeImmutable($order['paidAt'] ?? 'now'))->setTimezone($tz)->format('F j, Y');
+    $startOn = DateTimeImmutable::createFromFormat('!Y-m-d', $k['startDate'])->format('l, F j, Y');
+    $zones = implode(', ', array_map(fn($z) => $p['zones'][$z]['label'] ?? $z, $k['zones']));
+    $daypart = $p['dayparts'][$k['daypart']] ?? ['label' => $k['daypart'], 'detail' => ''];
+    $weeks = $k['weeks'] . ' week' . ($k['weeks'] == 1 ? '' : 's');
+
+    $prices = '';
+    foreach ($q['lines'] as $l) $prices .= "  {$l['label']} ({$l['detail']}): " . $money($l['amount']) . "\n";
+    if ($p['taxRate'] > 0) {
+        $prices .= "  Subtotal: " . $money($q['subtotal']) . "\n  {$p['taxLabel']} (" . ($p['taxRate'] * 100) . "%): " . $money($q['tax']) . "\n";
+    }
+    $prices .= "  Total: " . $money($q['total']) . " {$q['currency']}\n";
+
+    if ($order['demo']) {
+        $payment = "This was a test order: the site is in demo mode, so no card was charged.\n";
+    } else {
+        $card = trim(($t['cardType'] ?? 'Card') . (!empty($t['cardNumber']) ? ' ending in ' . substr((string) $t['cardNumber'], -4) : ''));
+        $payment = "Payment\n  $card, " . $money($t['amount'] ?? $q['total']) . " {$q['currency']}\n"
+            . "  Transaction: " . ($t['transactionId'] ?? '') . (!empty($t['approvalCode']) ? ", approval code {$t['approvalCode']}" : '') . "\n";
+    }
+
+    return "Hi {$c['name']},\n\n"
+        . "Thanks for booking ad time with Biztek Media. Here are the details of your order.\n\n"
+        . "Order: {$order['id']}\nDate: $paidOn\nBusiness: {$c['business']}\n\n"
+        . "Your campaign\n"
+        . "  Starts: $startOn, for $weeks\n"
+        . "  Zones: $zones\n"
+        . "  Plays: {$k['frequency']} per hour, {$daypart['label']}" . ($daypart['detail'] ? " ({$daypart['detail']})" : '') . "\n"
+        . "  Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']} seconds, {$order['composition']['orientation']}\n"
+        . "  Estimated plays: " . number_format($q['playsPerWeek']) . " per week, " . number_format($q['totalPlays']) . " in total\n\n"
+        . "Price\n$prices\n"
+        . "$payment\n"
+        . "What happens next\n"
+        . "  1. Review: we check your ad within " . ($k['addons']['rush'] ? '24 hours (rush)' : '48 hours') . ".\n"
+        . "  2. Fixes, if any: we'll email you here if anything needs a change.\n"
+        . "  3. Live: your ad starts playing on $startOn.\n\n"
+        . "Questions? Reply to this email and include your order number.\n\n"
+        . "Biztek Media\n" . bz_site_url() . "\n";
+}
+
+// Sends a plain-text email from from_email (or no-reply@ this site when it isn't set).
+function bz_mail(string $to, string $subject, string $body, ?string $replyTo = null): bool
+{
+    $from = trim((string) bz_config()['from_email']);
+    $valid = filter_var($from, FILTER_VALIDATE_EMAIL) !== false;
+    if (!$valid) $from = 'no-reply@' . preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+
+    $headers = "From: Biztek Media <$from>\r\n" . ($replyTo ? "Reply-To: $replyTo\r\n" : '') . 'Content-Type: text/plain; charset=UTF-8';
+    // -f sets the bounce address to from_email too, which helps the mail pass spam checks.
+    return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, $valid ? '-f' . $from : '');
 }

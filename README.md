@@ -30,7 +30,7 @@ You can also reuse a database you already have: the tables are named `bz_orders`
 - `db_name`, `db_user`, `db_pass`: the full names from step 1.
 - `admin_password`: the password for your orders page.
 - `notify_email`: where new orders are emailed. Optional.
-- `from_email`: an address on your own domain, for those emails.
+- `from_email`: an address on your own domain, such as `info@biztekmedia.ca`. Order emails and customer receipts come from it, and customers reply to it.
 - Leave `helcim_api_token` empty for now, so the site runs in demo mode.
 
 **3. PHP version.** cPanel → **Select PHP Version** (or **MultiPHP Manager**): choose **PHP 8.1 or newer**.
@@ -82,7 +82,7 @@ To publish later changes: push to GitHub, then in cPanel click **Update from Rem
 - a download link for each video or image
 - a download of the full ad layout: every layer's position, timing and animation, as JSON
 
-With `notify_email` set, each new order is also emailed to you. If emails don't arrive, check spam and make sure `from_email` is an address on your own domain.
+Each customer is emailed a receipt when they pay: order number, campaign, price breakdown, card and transaction, and what happens next. With `notify_email` set, each new order is also emailed to you. If emails don't arrive, check spam, make sure `from_email` is an address on your own domain, and turn on SPF and DKIM in cPanel → **Email Deliverability**.
 
 Uploaded files live in `biztek-private/storage/uploads`. Watch your hosting disk space; `max_upload_mb` in `config.php` caps each file. Uploads that were started but never finished are cleaned up after a day.
 
