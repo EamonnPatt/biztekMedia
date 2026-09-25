@@ -83,9 +83,6 @@
     layers: [],
   });
   const defaultCampaign = () => ({
-    zones: ['entrance', 'cardio'],
-    frequency: 4,
-    daypart: 'all',
     weeks: 4,
     startDate: isoDate(addDays(new Date(), 3)),
     addons: { priority: false, audio: false, designAssist: false, rush: false },
@@ -1017,7 +1014,6 @@
     if (saved && saved.campaign) {
       const c = defaultCampaign();
       campaign = { ...c, ...saved.campaign, addons: { ...c.addons, ...(saved.campaign.addons || {}) } };
-      if (!Array.isArray(campaign.zones)) campaign.zones = c.zones;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(campaign.startDate) || campaign.startDate < isoDate(new Date())) campaign.startDate = c.startDate;
     }
   }
@@ -1630,18 +1626,10 @@
   }
 
   function buildCampaign() {
-    const zoneKeys = Object.keys(PC.zones);
     const today = isoDate(new Date());
     dom.campaign.innerHTML = `
       ${H.section('Spot length', H.range('D.duration', 'Seconds each time it plays', PC.duration.min, PC.duration.max, 1, { fmt: 's' }))}
-      ${H.section('Screen zones', `<div class="zpick-list">${zoneKeys.map((k) => {
-        const z = PC.zones[k];
-        return `<label class="zpick"><input type="checkbox" data-zone="${k}"><span class="zp-name">${esc(z.label)}</span><span class="zp-meta">${z.screens} screen${z.screens > 1 ? 's' : ''}<br>×${z.weight.toFixed(2)}</span><span class="zp-note">${esc(z.note)}</span></label>`;
-      }).join('')}</div><p class="bundle-note" id="bundleNote"></p>`, H.btn('all-zones', 'Select all'))}
-      ${H.section('Plays per hour, per screen', `<div class="choice-grid cols-2">${PC.frequencies.map((f) => `
-        <label class="choice"><input type="radio" name="freq" data-radio="C.frequency" value="${f.value}"><b>${f.label}</b><span>${f.value} plays / hr</span><em>×${f.mult.toFixed(2)}</em></label>`).join('')}</div>`)}
-      ${H.section('Time of day', `<div class="choice-grid">${Object.entries(PC.dayparts).map(([k, d]) => `
-        <label class="choice"><input type="radio" name="daypart" data-radio="C.daypart" value="${k}"><b>${d.label}</b><span>${d.detail} · ${d.hours / 7} hrs a day</span><em>×${d.mult.toFixed(2)}</em></label>`).join('')}</div>`)}
+      ${H.section('Where it plays', `<div class="tier-card"><b>Every screen</b><p>Your ad runs on all ${currentQuote().screens} screens in the gym, ${esc(PC.rotation.hours)}.</p></div>`)}
       ${H.section('Schedule', `<div class="pgrid">
           <label class="f full"><span>Start date</span><input type="date" data-bind="C.startDate" min="${today}"></label>
           <label class="f full"><span>Run length</span><input type="range" class="rng" data-bind="C.weeks" min="${PC.weeks.min}" max="${PC.weeks.max}" step="1"></label>
@@ -1656,17 +1644,6 @@
 
   function syncCampaign() {
     syncBinds(dom.campaign);
-    $$('[data-zone]', dom.campaign).forEach((cb) => { cb.checked = campaign.zones.includes(cb.dataset.zone); });
-    $$('[data-radio]', dom.campaign).forEach((r) => { r.checked = String(getBind(r.dataset.radio)) === r.value; });
-
-    const n = Object.keys(PC.zones).length;
-    const all = campaign.zones.length === n;
-    const pct = Math.round(PC.bundleDiscount * 100);
-    const note = $('#bundleNote');
-    if (note) {
-      note.textContent = all ? `Every zone booked: ${pct}% off the zone total.` : `Book all ${n} zones to save ${pct}% on the zone total.`;
-      note.classList.toggle('is-on', all);
-    }
     const weeks = campaign.weeks;
     const wo = $('#weeksOut');
     if (wo) {
@@ -1687,15 +1664,6 @@
     }
   }
 
-  function toggleZone(k, on) {
-    const set = new Set(campaign.zones);
-    if (on) set.add(k); else set.delete(k);
-    campaign.zones = Object.keys(PC.zones).filter((z) => set.has(z));
-    syncCampaign();
-    updatePrice();
-    save();
-  }
-
   const currentQuote = () => P.quote({ ...campaign, format: detectFormat(), duration: doc.duration });
 
   function receiptHtml(q, title = 'Your quote') {
@@ -1706,20 +1674,17 @@
         <span class="r-label">${esc(l.label)}<span class="r-detail">${esc(l.detail)}</span></span>
         <span class="r-amt">${money(l.amount)}</span>
       </div>`).join('');
-    const tax = PC.taxRate > 0 && q.valid
-      ? `<div class="r-row"><span class="r-label">Subtotal</span><span class="r-amt">${money(q.subtotal)}</span></div>
+    const tax = PC.taxRate > 0
+      ?`<div class="r-row"><span class="r-label">Subtotal</span><span class="r-amt">${money(q.subtotal)}</span></div>
          <div class="r-row"><span class="r-label">${esc(PC.taxLabel)} (${round(PC.taxRate * 100, 2)}%)</span><span class="r-amt">${money(q.tax)}</span></div><hr>`
       : '';
     return `
       <p class="receipt-title">${esc(title)}</p>
-      <p class="receipt-sub">${fmt} · ${q.input.duration}s · ${q.input.frequency}/hr · ${PC.dayparts[q.input.daypart].label}</p>
+      <p class="receipt-sub">${fmt} · ${q.input.duration}s · every screen</p>
       <hr>
       <ul class="factor-list">
         <li><span>${fmt} base, 10s</span><span>${money(f.base)}</span></li>
         <li><span>× length ${q.input.duration}s</span><span>${f.durationMult.toFixed(3)}</span></li>
-        <li><span>× plays per hour</span><span>${f.frequencyMult.toFixed(2)}</span></li>
-        <li><span>× zones${f.bundle ? ' (bundle)' : ''}</span><span>${f.zoneWeight.toFixed(3)}</span></li>
-        <li><span>× time of day</span><span>${f.daypartMult.toFixed(2)}</span></li>
       </ul>
       <div class="r-row" style="margin-top:6px"><span class="r-label">Weekly rate</span><span class="r-amt">${money(q.weekly)}</span></div>
       <hr>
@@ -1727,12 +1692,11 @@
       <hr>
       ${tax}
       <div class="r-row r-total"><span>Total</span><span class="r-amt">${money(q.total)}</span></div>
-      ${q.valid ? `<hr>
-        <div class="r-row r-meta"><span>Screens</span><span>${q.screens}</span></div>
-        <div class="r-row r-meta"><span>Plays per week</span><span>${q.playsPerWeek.toLocaleString()}</span></div>
-        <div class="r-row r-meta"><span>Total plays</span><span>${q.totalPlays.toLocaleString()}</span></div>
-        <div class="r-row r-meta"><span>Cost per 1,000 plays</span><span>${money(q.costPer1000)}</span></div>`
-      : `<p class="r-errors">${esc(q.errors.join(' '))}</p>`}
+      <hr>
+      <div class="r-row r-meta"><span>Screens</span><span>${q.screens}</span></div>
+      <div class="r-row r-meta"><span>Plays per week</span><span>${q.playsPerWeek.toLocaleString()}</span></div>
+      <div class="r-row r-meta"><span>Total plays</span><span>${q.totalPlays.toLocaleString()}</span></div>
+      <div class="r-row r-meta"><span>Cost per 1,000 plays</span><span>${money(q.costPer1000)}</span></div>
       <p class="r-meta" style="text-align:center;margin:12px 0 0">All prices in ${esc(q.currency)}</p>`;
   }
 
@@ -1757,8 +1721,7 @@
     tweenTotal(q.total);
     const fmt = PC.formats[q.input.format].label;
     dom.pcRate.textContent = `${fmt.toUpperCase()} RATE`;
-    const zc = q.input.zones.length;
-    dom.rfSummary.textContent = `${fmt} · ${q.input.duration}s · ${zc} zone${zc === 1 ? '' : 's'} · ${q.input.weeks} wk`;
+    dom.rfSummary.textContent = `${fmt} · ${q.input.duration}s · every screen · ${q.input.weeks} wk`;
     const receipt = $('#quoteReceipt');
     if (receipt) receipt.innerHTML = receiptHtml(q);
     const tier = $('.tier-card', dom.props);
@@ -1785,7 +1748,6 @@
     const missing = visible.find((l) => isMedia(l) && !media.has(l.mediaId));
     if (missing) { select(missing.id); toast('One of your media files is missing. Replace or delete that layer first.', 'error'); return; }
     const q = currentQuote();
-    if (!q.valid) { switchRightTab('campaign'); toast(q.errors[0], 'error'); return; }
     if (!campaign.startDate || campaign.startDate < isoDate(new Date())) {
       switchRightTab('campaign');
       toast('Pick a start date from today onward.', 'error');
@@ -2213,15 +2175,7 @@
   });
 
   for (const pane of [dom.props, dom.campaign]) {
-    const onInput = (e) => {
-      const el = e.target;
-      if (el.dataset.zone) { if (e.type === 'change') toggleZone(el.dataset.zone, el.checked); return; }
-      if (el.dataset.radio) {
-        if (e.type === 'change') applyBind(el.dataset.radio, /^-?\d+(\.\d+)?$/.test(el.value) ? parseFloat(el.value) : el.value, true);
-        return;
-      }
-      if (el.dataset.bind) onBindInput(e);
-    };
+    const onInput = (e) => { if (e.target.dataset.bind) onBindInput(e); };
     pane.addEventListener('input', onInput);
     pane.addEventListener('change', onInput);
     pane.addEventListener('click', (e) => {
@@ -2235,15 +2189,7 @@
       const sw = e.target.closest('[data-swatch]');
       if (sw) { applyBind(sw.dataset.swatch, sw.dataset.value, true); return; }
       const act = e.target.closest('[data-action]');
-      if (!act) return;
-      if (act.dataset.action === 'all-zones') {
-        campaign.zones = Object.keys(PC.zones);
-        syncCampaign();
-        updatePrice();
-        save();
-      } else {
-        runAction(act.dataset.action);
-      }
+      if (act) runAction(act.dataset.action);
     });
   }
 
@@ -2329,7 +2275,7 @@
   });
   $('#newAdBtn').addEventListener('click', () => {
     doc = defaultDoc();
-    campaign = { ...defaultCampaign(), zones: campaign.zones.slice() };
+    campaign = defaultCampaign();
     selectedId = null;
     t = 0;
     order = null;

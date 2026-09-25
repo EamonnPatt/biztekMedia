@@ -14,7 +14,6 @@ declare(strict_types=1);
 
 require __DIR__ . '/common.php';
 
-const HELCIM_API = 'https://api.helcim.com/v2';
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const UPLOADS_PER_HOUR_PER_IP = 40;
 
@@ -200,7 +199,6 @@ function api_checkout(): never
 
     $campaign = is_array($b['campaign'] ?? null) ? $b['campaign'] : [];
     $q = bz_pricing()->quote(array_merge($campaign, ['format' => $format, 'duration' => $composition['duration']]));
-    if (!$q['valid']) throw new HttpError(400, implode(' ', $q['errors']));
 
     $startDate = (string) ($campaign['startDate'] ?? '');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || $startDate < gmdate('Y-m-d', time() - 86400)) {
@@ -272,12 +270,7 @@ function api_confirm(): never
     if (!$txn) throw new HttpError(400, 'Missing transaction details.');
 
     // 1) Check the signature HelcimPay.js attached, using the secret only this server knows.
-    $verified = false;
-    if (is_string($payload['hash'] ?? null)) {
-        foreach ([json_encode($txn, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), json_like_js($txn)] as $encoded) {
-            if (hash_equals(hash('sha256', $encoded . $order['_secret']), $payload['hash'])) { $verified = true; break; }
-        }
-    }
+    $verified = is_string($payload['hash'] ?? null) && helcim_signature_ok($txn, $payload['hash'], $order['_secret']);
     // 2) If the signature can't be reproduced byte-for-byte, ask Helcim directly.
     if (!$verified && !empty($txn['transactionId'])) {
         $lookup = helcim('GET', '/card-transactions/' . rawurlencode((string) $txn['transactionId']));
@@ -338,6 +331,21 @@ function order_json(array $order): string
     return json_encode($order, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
+// HelcimPay.js signs a transaction as sha256(transaction JSON + secret token). The JSON arrives
+// already decoded, so re-encode it each way it could have been written and look for a match.
+function helcim_signature_ok(array $txn, string $hash, string $secret): bool
+{
+    $encodings = [
+        json_encode($txn, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        json_encode($txn),
+        json_like_js($txn),
+    ];
+    foreach ($encodings as $encoded) {
+        if (hash_equals(hash('sha256', $encoded . $secret), $hash)) return true;
+    }
+    return false;
+}
+
 // JSON.stringify-style encoding (whole-number floats without ".0"), for signature checks.
 function json_like_js(mixed $v): string
 {
@@ -355,28 +363,6 @@ function pick_transaction(array $t): array
 {
     $keys = ['transactionId', 'status', 'amount', 'currency', 'cardType', 'cardNumber', 'approvalCode', 'dateCreated'];
     return array_intersect_key($t, array_flip($keys));
-}
-
-function helcim(string $method, string $endpoint, ?array $body = null): array
-{
-    $ch = curl_init(HELCIM_API . $endpoint);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CUSTOMREQUEST => $method,
-        CURLOPT_TIMEOUT => 25,
-        CURLOPT_HTTPHEADER => [
-            'accept: application/json',
-            'content-type: application/json',
-            'api-token: ' . trim((string) bz_config()['helcim_api_token']),
-        ],
-    ]);
-    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-    $raw = curl_exec($ch);
-    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
-    $data = is_string($raw) ? json_decode($raw, true) : null;
-    return ['ok' => $status >= 200 && $status < 300, 'status' => $status, 'data' => is_array($data) ? $data : [], 'error' => $error];
 }
 
 /* ---------------------------------------------------------------- input cleaning */
@@ -448,8 +434,7 @@ function notify_new_order(array $order): void
     $p = bz_pricing()->config;
     $c = $order['contact'];
     $k = $order['campaign'];
-    $zones = implode(', ', array_map(fn($z) => $p['zones'][$z]['label'] ?? $z, $k['zones']));
-    $files = implode("\n", array_map(fn($u) => "  - {$u['name']} ({$u['kind']})", $order['uploads'])) ?: '  (none)';
+    $files =implode("\n", array_map(fn($u) => "  - {$u['name']} ({$u['kind']})", $order['uploads'])) ?: '  (none)';
     $demo = $order['demo'] ? ' [DEMO, no charge]' : '';
 
     $body = "New ad order {$order['id']}$demo\n\n"
@@ -458,7 +443,7 @@ function notify_new_order(array $order): void
         . ($c['website'] ? "Website: {$c['website']}\n" : '')
         . ($c['notes'] ? "Notes: {$c['notes']}\n" : '')
         . "\nStarts {$k['startDate']} for {$k['weeks']} week(s)\n"
-        . "Zones: $zones\n{$k['frequency']} plays/hr, " . ($p['dayparts'][$k['daypart']]['label'] ?? $k['daypart']) . "\n"
+        . "Every screen, {$p['rotation']['hours']}\n"
         . "Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']}s\nFiles:\n$files\n\n"
         . "Review it: " . bz_site_url() . "/admin.php\n";
 
@@ -494,8 +479,6 @@ function order_receipt_text(array $order): string
     $tz = new DateTimeZone(bz_config()['timezone'] ?: 'UTC');
     $paidOn = (new DateTimeImmutable($order['paidAt'] ?? 'now'))->setTimezone($tz)->format('F j, Y');
     $startOn = DateTimeImmutable::createFromFormat('!Y-m-d', $k['startDate'])->format('l, F j, Y');
-    $zones = implode(', ', array_map(fn($z) => $p['zones'][$z]['label'] ?? $z, $k['zones']));
-    $daypart = $p['dayparts'][$k['daypart']] ?? ['label' => $k['daypart'], 'detail' => ''];
     $weeks = $k['weeks'] . ' week' . ($k['weeks'] == 1 ? '' : 's');
 
     $prices = '';
@@ -518,8 +501,7 @@ function order_receipt_text(array $order): string
         . "Order: {$order['id']}\nDate: $paidOn\nBusiness: {$c['business']}\n\n"
         . "Your campaign\n"
         . "  Starts: $startOn, for $weeks\n"
-        . "  Zones: $zones\n"
-        . "  Plays: {$k['frequency']} per hour, {$daypart['label']}" . ($daypart['detail'] ? " ({$daypart['detail']})" : '') . "\n"
+        . "  Where: every screen in the gym, {$p['rotation']['hours']}\n"
         . "  Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']} seconds, {$order['composition']['orientation']}\n"
         . "  Estimated plays: " . number_format($q['playsPerWeek']) . " per week, " . number_format($q['totalPlays']) . " in total\n\n"
         . "Price\n$prices\n"

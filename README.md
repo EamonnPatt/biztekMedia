@@ -1,6 +1,6 @@
 # Biztek Media
 
-Sells ad space on the screens inside the gym. Advertisers build their own video, image or text ad in the **Ad Studio**, pick zones and a schedule, watch the price update live, and pay with **Helcim**.
+Sells ad space on the screens inside the gym. Advertisers build their own video, image or text ad in the **Ad Studio**, pick a schedule, watch the price update live, and pay with **Helcim**. Every ad plays on every screen in the gym, all day.
 
 Runs on ordinary PHP web hosting with a MySQL database, such as GoDaddy cPanel hosting. No Node.js needed.
 
@@ -50,6 +50,19 @@ The database tables and the `storage` folder are created automatically on first 
 - Open `yourdomain.com/admin.php`, sign in, and you'll see the order with download links for its files.
 
 **7. Go live.** Put your Helcim API token in `config.php` as `helcim_api_token`. You get it from Helcim → Integrations → API Access, with permission to process transactions. The next checkout opens Helcim's real card form.
+- On the orders page, click **Test Helcim connection**. It opens a $1.00 checkout session, as every real checkout does, and tells you whether Helcim accepted your token. Nothing is charged.
+- Place one real order with your own card, check it appears on the orders page as **paid** and that the receipt email arrives, then refund it in Helcim.
+
+## Tests
+
+From the project folder on your computer (needs PHP 8.1+; Node.js too for the price comparison):
+
+```
+php tests/run.php                           # pricing, payment signature checks, deploy files
+php tests/run.php https://biztekmedia.ca    # also checks the live site after you deploy
+```
+
+The live checks confirm the site is out of demo mode, sends `http://` to `https://`, and runs the same prices as your code, which shows the latest commit was deployed.
 
 ## Deploy from GitHub (optional)
 
@@ -89,10 +102,10 @@ Uploaded files live in `biztek-private/storage/uploads`. Watch your hosting disk
 ## Change prices, zones and screens
 
 All rates live in the `CONFIG` block at the top of `public_html/js/pricing.js`:
-- base rates and the length curve
-- zones, with their names, screen counts and weights
-- plays per hour, time of day, term discounts
-- add-ons, minimum order, currency and tax
+- base rates (the weekly price for a 10s spot on every screen) and the length curve
+- zones, with their names and screen counts (shown on the landing page and used for the play estimates)
+- rotation: the screens' hours and how often a spot comes round, also for the play estimates
+- term discounts, add-ons, minimum order, currency and tax
 
 The landing page, the studio and the PHP server all read that one block, so a change shows up everywhere.
 

@@ -1,5 +1,9 @@
-# biztekmedia.ca sits inside another site's folder (an addon domain), so that site's
-# WordPress rewrite rules would otherwise apply here too and turn every missing page into
-# a 500 error. This site needs no rewriting: switch it off and serve index.html as the home page.
-RewriteEngine Off
+# biztekmedia.ca sits inside another site's folder (an addon domain). Rewrite rules set here
+# replace that site's WordPress rules, which would otherwise apply too and turn every missing
+# page into a 500 error. The only rule this site needs: send http:// visits to https://,
+# so the checkout page is never served over an insecure connection.
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 DirectoryIndex index.html

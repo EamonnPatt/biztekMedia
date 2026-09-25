@@ -110,21 +110,6 @@ final class Pricing
         $format = is_string($i['format'] ?? null) && isset($c['formats'][$i['format']]) ? $i['format'] : 'text';
         $duration = (int) self::clamp(floor(self::orDefault(self::num($i['duration'] ?? null), 15) + 0.5), $c['duration']['min'], $c['duration']['max']);
 
-        $wanted = self::num($i['frequency'] ?? null);
-        $freq = $c['frequencies'][1];
-        foreach ($c['frequencies'] as $f) {
-            if ($f['value'] == $wanted) { $freq = $f; break; }
-        }
-
-        $daypart = is_string($i['daypart'] ?? null) && isset($c['dayparts'][$i['daypart']]) ? $i['daypart'] : 'all';
-
-        $zones = [];
-        if (isset($i['zones']) && is_array($i['zones']) && array_is_list($i['zones'])) {
-            foreach (array_keys($c['zones']) as $z) {
-                if (in_array($z, $i['zones'], true)) $zones[] = $z;
-            }
-        }
-
         $weeks = (int) self::clamp(floor(self::orDefault(self::num($i['weeks'] ?? null), 1) + 0.5), $c['weeks']['min'], $c['weeks']['max']);
 
         $a = isset($i['addons']) && is_array($i['addons']) ? $i['addons'] : [];
@@ -135,10 +120,7 @@ final class Pricing
             'rush' => self::truthy($a['rush'] ?? null),
         ];
 
-        return [
-            'format' => $format, 'duration' => $duration, 'frequency' => $freq['value'], 'daypart' => $daypart,
-            'zones' => $zones, 'weeks' => $weeks, 'addons' => $addons,
-        ];
+        return ['format' => $format, 'duration' => $duration, 'weeks' => $weeks, 'addons' => $addons];
     }
 
     public function quote(mixed $input): array
@@ -146,23 +128,10 @@ final class Pricing
         $c = $this->config;
         $n = $this->normalize($input);
         $fmt = $c['formats'][$n['format']];
-        $freq = null;
-        foreach ($c['frequencies'] as $f) {
-            if ($f['value'] == $n['frequency']) { $freq = $f; break; }
-        }
-        $dp = $c['dayparts'][$n['daypart']];
-        $allZones = count($n['zones']) === count($c['zones']);
-
         $durationMult = $this->durationMultiplier($n['duration']);
-        $rawZoneWeight = 0.0;
-        $screens = 0;
-        foreach ($n['zones'] as $z) {
-            $rawZoneWeight += $c['zones'][$z]['weight'];
-            $screens += $c['zones'][$z]['screens'];
-        }
-        $zoneWeight = self::round3($rawZoneWeight * ($allZones ? 1 - $c['bundleDiscount'] : 1));
+        $screens = array_sum(array_column($c['zones'], 'screens'));
 
-        $weekly = self::round2($fmt['base'] * $durationMult * $freq['mult'] * $zoneWeight * $dp['mult']);
+        $weekly = self::round2($fmt['base'] * $durationMult);
         $lines = [];
 
         $airtime = self::round2($weekly * $n['weeks']);
@@ -195,37 +164,25 @@ final class Pricing
         $sum = 0.0;
         foreach ($lines as $l) $sum += $l['amount'];
         $subtotal = self::round2($sum);
-        $hasZones = count($n['zones']) > 0;
-        if ($hasZones && $subtotal < $c['minimumOrder']) {
+        if ($subtotal < $c['minimumOrder']) {
             $lines[] = ['key' => 'minimum', 'label' => 'Minimum order', 'detail' => self::money($c['minimumOrder']) . ' minimum', 'amount' => self::round2($c['minimumOrder'] - $subtotal)];
             $subtotal = $c['minimumOrder'];
         }
 
         $tax = self::round2($subtotal * $c['taxRate']);
-        $total = $hasZones ? self::round2($subtotal + $tax) : 0;
+        $total = self::round2($subtotal + $tax);
 
-        $playsPerWeek = $n['frequency'] * $dp['hours'] * $screens;
+        $playsPerWeek = $c['rotation']['playsPerHour'] * $c['rotation']['hoursPerWeek'] * $screens;
         $totalPlays = $playsPerWeek * $n['weeks'];
 
-        $errors = $hasZones ? [] : ['Pick at least one screen zone.'];
-
         return [
-            'valid' => !$errors,
-            'errors' => $errors,
             'currency' => $c['currency'],
             'input' => $n,
-            'factors' => [
-                'base' => $fmt['base'],
-                'durationMult' => $durationMult,
-                'frequencyMult' => $freq['mult'],
-                'zoneWeight' => $zoneWeight,
-                'bundle' => $allZones,
-                'daypartMult' => $dp['mult'],
-            ],
+            'factors' => ['base' => $fmt['base'], 'durationMult' => $durationMult],
             'weekly' => $weekly,
             'lines' => $lines,
-            'subtotal' => $hasZones ? $subtotal : 0,
-            'tax' => $hasZones ? $tax : 0,
+            'subtotal' => $subtotal,
+            'tax' => $tax,
             'total' => $total,
             'screens' => $screens,
             'playsPerWeek' => $playsPerWeek,

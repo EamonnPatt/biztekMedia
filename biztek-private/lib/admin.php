@@ -77,7 +77,33 @@ function admin_route(): void
         echo json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         return;
     }
+    if (isset($_GET['check-helcim'])) {
+        admin_helcim_check();
+        return;
+    }
     admin_orders_page(isset($_GET['all']));
+}
+
+// Opens a $1.00 Helcim checkout session, the same call every real checkout starts with, and
+// reports whether Helcim accepted the API token. Nobody pays, so nothing is charged.
+function admin_helcim_check(): void
+{
+    $back = '<p><a class="btn btn-orange" href="admin.php">Back to orders</a></p>';
+    if (bz_demo()) {
+        admin_shell('Helcim check', '<h1>Helcim check</h1><p class="notice">No Helcim API token is set, so the site is in demo mode. Add <code>helcim_api_token</code> to config.php.</p>' . $back);
+        return;
+    }
+    $r = helcim('POST', '/helcim-pay/initialize', ['paymentType' => 'purchase', 'amount' => 1.00, 'currency' => bz_pricing()->config['currency']]);
+    if ($r['ok'] && !empty($r['data']['checkoutToken'])) {
+        $result = '<p class="notice"><b>Working.</b> Helcim accepted your API token and opened a test checkout session. No card was charged. Advertisers can pay by card.</p>';
+    } else {
+        $detail = $r['status'] === 0
+            ? "Couldn't reach Helcim: " . $r['error']
+            : 'Helcim answered HTTP ' . $r['status'] . ': ' . json_encode($r['data']['errors'] ?? $r['data'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $result = '<p class="notice"><b>Not working.</b> ' . bz_h(bz_cut($detail, 500)) . '</p>'
+            . '<p class="muted">Check that <code>helcim_api_token</code> in config.php is copied exactly, and that the token has permission to process transactions (Helcim → Integrations → API Access).</p>';
+    }
+    admin_shell('Helcim check', '<h1>Helcim check</h1>' . $result . $back);
 }
 
 function admin_download(string $id): void
@@ -144,7 +170,9 @@ function admin_orders_page(bool $showAll): void
         $k = $o['campaign'] ?? [];
         $comp = $o['composition'] ?? [];
         $end = !empty($k['startDate']) ? (new DateTime($k['startDate'] . ' 00:00:00', new DateTimeZone('UTC')))->modify('+' . ((int) ($k['weeks'] ?? 1) * 7 - 1) . ' days')->format('Y-m-d') : '';
-        $zones = implode(', ', array_map(fn($z) => bz_h($p['zones'][$z]['label'] ?? $z), $k['zones'] ?? []));
+        // Orders placed before every ad went on every screen still carry their chosen zones.
+        $where = empty($k['zones']) ? 'Every screen'
+            : implode(', ', array_map(fn($z) => bz_h($p['zones'][$z]['label'] ?? $z), $k['zones'])) . '<br>' . bz_h(($k['frequency'] ?? '') . '/hr · ' . ($k['daypart'] ?? ''));
         $addons = implode(', ', array_map(fn($a) => bz_h($p['addons'][$a]['label'] ?? $a), array_keys(array_filter($k['addons'] ?? []))));
         $media = implode('<br>', array_map(fn($u) => '<a href="admin.php?download=' . bz_h($u['id']) . '">' . bz_h($u['name']) . '</a> <span class="muted">' . bz_h($u['kind']) . ' · ' . $size((int) $u['size']) . '</span>', $o['uploads'] ?? []));
         $t = $o['transaction'] ?? null;
@@ -163,8 +191,8 @@ function admin_orders_page(bool $showAll): void
                 . (!empty($c['phone']) ? '<br>' . bz_h($c['phone']) : '')
                 . ($site !== '' ? '<br><a href="' . bz_h($siteUrl) . '" target="_blank" rel="noopener noreferrer">' . bz_h($site) . '</a>' : '') . '</p>'
                 . (!empty($c['notes']) ? '<p class="notes">' . bz_h($c['notes']) . '</p>' : '') . '</section>
-            <section><h3>Schedule</h3><p>' . bz_h($k['startDate'] ?? '') . ' → ' . bz_h($end) . ' <span class="muted">(' . bz_h($k['weeks'] ?? '') . ' wk)</span><br>' . $zones . '<br>'
-                . bz_h($k['frequency'] ?? '') . '/hr · ' . bz_h($p['dayparts'][$k['daypart'] ?? '']['label'] ?? '') . '<br>' . ($addons ?: '<span class="muted">No add-ons</span>') . '</p></section>
+            <section><h3>Schedule</h3><p>' . bz_h($k['startDate'] ?? '') . ' → ' . bz_h($end) . ' <span class="muted">(' . bz_h($k['weeks'] ?? '') . ' wk)</span><br>' . $where . '<br>'
+                . ($addons ?: '<span class="muted">No add-ons</span>') . '</p></section>
             <section><h3>Ad</h3><p>' . bz_h($p['formats'][$k['format'] ?? '']['label'] ?? '') . ' · ' . bz_h($comp['duration'] ?? '') . 's · ' . bz_h($comp['orientation'] ?? '') . ' · ' . count($comp['layers'] ?? []) . ' layers<br>'
                 . ($media ?: '<span class="muted">No media files</span>') . '<br><a href="admin.php?order=' . bz_h($row['id']) . '">Download full layout (JSON)</a></p></section>
           </div>
@@ -174,7 +202,7 @@ function admin_orders_page(bool $showAll): void
 
     $mode = bz_demo() ? 'demo mode (no cards charged)' : 'Helcim live';
     admin_shell('Orders', '<h1>Orders</h1>
-      <p class="muted">' . ($showAll ? 'All recent orders, including unpaid checkouts. <a href="admin.php">Hide unpaid</a>' : 'Paid orders. <a href="admin.php?all=1">Show unpaid checkouts too</a>') . ' · Payments: ' . $mode . '</p>'
+      <p class="muted">' . ($showAll ? 'All recent orders, including unpaid checkouts. <a href="admin.php">Hide unpaid</a>' : 'Paid orders. <a href="admin.php?all=1">Show unpaid checkouts too</a>') . ' · Payments: ' . $mode . ' · <a href="admin.php?check-helcim=1">Test Helcim connection</a></p>'
       . ($cards ?: '<p class="notice">No orders yet.</p>'));
 }
 

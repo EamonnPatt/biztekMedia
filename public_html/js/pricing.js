@@ -7,11 +7,10 @@
  * Editing prices: change numbers inside the CONFIG block only. It must stay valid JSON
  * (double quotes, no comments, no trailing commas) because PHP reads it too.
  *
- *   formats.*.base     weekly rate for a 10s spot, one zone, standard rotation, all day
+ *   formats.*.base     weekly rate for a 10s spot (every ad plays on every screen, all day)
  *   duration.curve     how price grows with length (below 1 = longer spots cost less per second)
- *   zones.*.weight     how much each zone adds; screens = number of screens (placeholders)
- *   bundleDiscount     taken off the zone total when every zone is booked
- *   dayparts.*.hours   hours per week the ad is in rotation (gym open 5am–11pm)
+ *   zones.*.screens    number of screens in each part of the gym (placeholders)
+ *   rotation           hours the screens are on and how often a spot comes round; used for play estimates
  *   taxRate            e.g. 0.05 for 5% GST
  */
 (function (root, factory) {
@@ -24,31 +23,20 @@
   const CONFIG = /*BZ-CONFIG-START*/{
     "currency": "CAD",
     "formats": {
-      "text":  { "label": "Text",  "base": 15, "accepts": "Just type — no files needed" },
-      "image": { "label": "Image", "base": 25, "accepts": "JPG, PNG, WEBP, GIF" },
-      "video": { "label": "Video", "base": 40, "accepts": "MP4, WEBM, MOV" }
+      "text":  { "label": "Text",  "base": 77.15,  "accepts": "Just type — no files needed" },
+      "image": { "label": "Image", "base": 128.57, "accepts": "JPG, PNG, WEBP, GIF" },
+      "video": { "label": "Video", "base": 205.72, "accepts": "MP4, WEBM, MOV" }
     },
     "duration": { "min": 10, "max": 60, "curve": 0.75 },
     "zones": {
-      "entrance": { "label": "Front Desk & Entry",    "screens": 2, "weight": 1.25, "note": "Every member, every visit" },
-      "cardio":   { "label": "Cardio Deck",           "screens": 4, "weight": 1.4,  "note": "Longest dwell time on the floor" },
-      "weights":  { "label": "Free Weights",          "screens": 2, "weight": 1.0,  "note": "Between-set glances" },
-      "studio":   { "label": "Studio & Classes",      "screens": 1, "weight": 0.8,  "note": "Before and after every class" },
-      "recovery": { "label": "Stretch & Recovery",    "screens": 1, "weight": 0.7,  "note": "Slow, relaxed attention" },
-      "lounge":   { "label": "Smoothie Bar & Lounge", "screens": 1, "weight": 0.9,  "note": "Post-workout hangout" }
+      "entrance": { "label": "Front Desk & Entry",    "screens": 2, "note": "Every member, every visit" },
+      "cardio":   { "label": "Cardio Deck",           "screens": 4, "note": "Longest dwell time on the floor" },
+      "weights":  { "label": "Free Weights",          "screens": 2, "note": "Between-set glances" },
+      "studio":   { "label": "Studio & Classes",      "screens": 1, "note": "Before and after every class" },
+      "recovery": { "label": "Stretch & Recovery",    "screens": 1, "note": "Slow, relaxed attention" },
+      "lounge":   { "label": "Smoothie Bar & Lounge", "screens": 1, "note": "Post-workout hangout" }
     },
-    "bundleDiscount": 0.15,
-    "frequencies": [
-      { "value": 2,  "label": "Light",      "mult": 0.6 },
-      { "value": 4,  "label": "Standard",   "mult": 1.0 },
-      { "value": 6,  "label": "Heavy",      "mult": 1.4 },
-      { "value": 10, "label": "Saturation", "mult": 2.1 }
-    ],
-    "dayparts": {
-      "all":     { "label": "All day",    "detail": "5am – 11pm",       "hours": 126, "mult": 1.0 },
-      "prime":   { "label": "Prime time", "detail": "5–9am & 4–8pm",    "hours": 56,  "mult": 0.7 },
-      "offpeak": { "label": "Off-peak",   "detail": "9am–4pm & 8–11pm", "hours": 70,  "mult": 0.45 }
-    },
+    "rotation": { "hours": "5am – 11pm", "hoursPerWeek": 126, "playsPerHour": 4 },
     "weeks": { "min": 1, "max": 26 },
     "termDiscounts": [
       { "minWeeks": 12, "rate": 0.20 },
@@ -75,7 +63,7 @@
     return round3(Math.pow(d / 10, CONFIG.duration.curve));
   }
 
-  /** Weekly rate for one zone at standard rotation — used by the public rate card. */
+  /** Weekly rate on every screen — used by the public rate card. */
   function spotRate(format, seconds) {
     const f = CONFIG.formats[format] || CONFIG.formats.text;
     return round2(f.base * durationMultiplier(seconds));
@@ -90,11 +78,6 @@
     const i = input || {};
     const format = CONFIG.formats[i.format] ? i.format : 'text';
     const duration = clamp(Math.round(Number(i.duration) || 15), CONFIG.duration.min, CONFIG.duration.max);
-    const freq = CONFIG.frequencies.find((f) => f.value === Number(i.frequency)) || CONFIG.frequencies[1];
-    const daypart = CONFIG.dayparts[i.daypart] ? i.daypart : 'all';
-    const zones = Array.isArray(i.zones)
-      ? Object.keys(CONFIG.zones).filter((z) => i.zones.includes(z))
-      : [];
     const weeks = clamp(Math.round(Number(i.weeks) || 1), CONFIG.weeks.min, CONFIG.weeks.max);
     const addons = {
       priority: !!(i.addons && i.addons.priority),
@@ -102,22 +85,16 @@
       designAssist: !!(i.addons && i.addons.designAssist),
       rush: !!(i.addons && i.addons.rush),
     };
-    return { format, duration, frequency: freq.value, daypart, zones, weeks, addons };
+    return { format, duration, weeks, addons };
   }
 
   function quote(input) {
     const n = normalize(input);
     const fmt = CONFIG.formats[n.format];
-    const freq = CONFIG.frequencies.find((f) => f.value === n.frequency);
-    const dp = CONFIG.dayparts[n.daypart];
-    const allZones = n.zones.length === Object.keys(CONFIG.zones).length;
-
     const durationMult = durationMultiplier(n.duration);
-    const rawZoneWeight = n.zones.reduce((s, z) => s + CONFIG.zones[z].weight, 0);
-    const zoneWeight = round3(rawZoneWeight * (allZones ? 1 - CONFIG.bundleDiscount : 1));
-    const screens = n.zones.reduce((s, z) => s + CONFIG.zones[z].screens, 0);
+    const screens = Object.values(CONFIG.zones).reduce((s, z) => s + z.screens, 0);
 
-    const weekly = round2(fmt.base * durationMult * freq.mult * zoneWeight * dp.mult);
+    const weekly = round2(fmt.base * durationMult);
     const lines = [];
 
     const airtime = round2(weekly * n.weeks);
@@ -146,38 +123,26 @@
     }
 
     let subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
-    if (n.zones.length && subtotal < CONFIG.minimumOrder) {
+    if (subtotal < CONFIG.minimumOrder) {
       const adj = round2(CONFIG.minimumOrder - subtotal);
       lines.push({ key: 'minimum', label: 'Minimum order', detail: `${money(CONFIG.minimumOrder)} minimum`, amount: adj });
       subtotal = CONFIG.minimumOrder;
     }
 
     const tax = round2(subtotal * CONFIG.taxRate);
-    const total = n.zones.length ? round2(subtotal + tax) : 0;
+    const total = round2(subtotal + tax);
 
-    const playsPerWeek = n.frequency * dp.hours * screens;
+    const playsPerWeek = CONFIG.rotation.playsPerHour * CONFIG.rotation.hoursPerWeek * screens;
     const totalPlays = playsPerWeek * n.weeks;
 
-    const errors = [];
-    if (!n.zones.length) errors.push('Pick at least one screen zone.');
-
     return {
-      valid: errors.length === 0,
-      errors,
       currency: CONFIG.currency,
       input: n,
-      factors: {
-        base: fmt.base,
-        durationMult,
-        frequencyMult: freq.mult,
-        zoneWeight,
-        bundle: allZones,
-        daypartMult: dp.mult,
-      },
+      factors: { base: fmt.base, durationMult },
       weekly,
       lines,
-      subtotal: n.zones.length ? subtotal : 0,
-      tax: n.zones.length ? tax : 0,
+      subtotal,
+      tax,
       total,
       screens,
       playsPerWeek,

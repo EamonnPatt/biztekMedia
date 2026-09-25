@@ -31,7 +31,7 @@
     from: money(Math.min(...Object.values(C.formats).map((f) => f.base))).replace('.00', ''),
     zones: zoneKeys.length,
     screens: zoneKeys.reduce((s, k) => s + C.zones[k].screens, 0),
-    bundle: Math.round(C.bundleDiscount * 100) + '%',
+    hours: C.rotation.hours,
   };
   $$('[data-fact]').forEach((el) => {
     const v = facts[el.dataset.fact];
@@ -77,24 +77,12 @@
   const lengths = [10, 15, 20, 30, 45, 60];
   const plates = [
     {
-      title: 'Format', note: 'Weekly base for a 10s spot in one zone.',
+      title: 'Format', note: 'Weekly base for a 10s spot on every screen.',
       rows: Object.values(C.formats).map((f) => [f.label, money(f.base) + '<small>/wk</small>']),
     },
     {
       title: 'Length', note: 'Longer spots cost less per second.',
       rows: lengths.map((s) => [s + ' seconds', x2(P.durationMultiplier(s))]),
-    },
-    {
-      title: 'Plays per hour', note: 'How often it runs on each screen.',
-      rows: C.frequencies.map((f) => [`${f.label} <small>${f.value}/hr</small>`, x2(f.mult)]),
-    },
-    {
-      title: 'Zones', note: `Add up the zones you book. All ${zoneKeys.length}: −${Math.round(C.bundleDiscount * 100)}%.`,
-      rows: zoneKeys.map((k) => [C.zones[k].label, '+' + C.zones[k].weight.toFixed(2)]),
-    },
-    {
-      title: 'Time of day', note: 'When your spot is in rotation.',
-      rows: Object.values(C.dayparts).map((d) => [`${d.label} <small>${d.detail}</small>`, x2(d.mult)]),
     },
     {
       title: 'Weeks', note: `Run ${C.weeks.min}–${C.weeks.max} weeks. Longer runs save more.`,
@@ -117,11 +105,11 @@
     <li><b>${esc(a.label)}</b><span>${esc(a.detail)}${a.formats ? ' · video only' : ''}</span><em>${addonPrice(a)}</em></li>`).join('');
 
   /* ---------------------------------------------------------- example receipt */
-  const example = { format: 'image', duration: 15, frequency: 4, daypart: 'all', zones: ['entrance', 'cardio'], weeks: 4 };
+  const example = { format: 'image', duration: 15, weeks: 4 };
   const q = P.quote(example);
   $('#exampleReceipt').innerHTML = `
     <p class="receipt-title">Example order</p>
-    <p class="receipt-sub">15s image · Front Desk + Cardio · 4 plays/hr</p>
+    <p class="receipt-sub">15s image · every screen · 4 weeks</p>
     <hr>
     ${q.lines.map((l) => `
       <div class="r-row${l.amount < 0 ? ' is-neg' : ''}">
@@ -136,19 +124,16 @@
     <a class="btn btn-orange" href="editor.html?start=image">Build one like this →</a>`;
 
   /* ---------------------------------------------------------- floor plan */
-  const weights = zoneKeys.map((k) => C.zones[k].weight);
-  const wMin = Math.min(...weights);
-  const wMax = Math.max(...weights);
   $('#floorplan').innerHTML = zoneKeys.map((k) => {
     const z = C.zones[k];
-    const heat = 0.06 + ((z.weight - wMin) / (wMax - wMin || 1)) * 0.5;
+    const count = `${z.screens} screen${z.screens > 1 ? 's' : ''}`;
     return `
-      <div class="zone zone--${k}" style="grid-area:${k};--heat:${heat.toFixed(2)}">
+      <div class="zone zone--${k}" style="grid-area:${k}">
         <h3>${esc(z.label)}</h3>
         <p>${esc(z.note)}</p>
         <div class="zone-foot">
-          <span class="zone-screens" aria-label="${z.screens} screen${z.screens > 1 ? 's' : ''}">${'<i></i>'.repeat(z.screens)}</span>
-          <span class="zone-weight">×${z.weight.toFixed(2)}</span>
+          <span class="zone-screens" aria-hidden="true">${'<i></i>'.repeat(z.screens)}</span>
+          <span class="zone-count">${count}</span>
         </div>
       </div>`;
   }).join('');

@@ -64,6 +64,29 @@ function bz_demo(): bool
     return trim((string) bz_config()['helcim_api_token']) === '';
 }
 
+// Calls Helcim's API with the token from config.php.
+function helcim(string $method, string $endpoint, ?array $body = null): array
+{
+    $ch = curl_init('https://api.helcim.com/v2' . $endpoint);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_HTTPHEADER => [
+            'accept: application/json',
+            'content-type: application/json',
+            'api-token: ' . trim((string) bz_config()['helcim_api_token']),
+        ],
+    ]);
+    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+    $raw = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    return ['ok' => $status >= 200 && $status < 300, 'status' => $status, 'data' => is_array($data) ? $data : [], 'error' => $error];
+}
+
 function bz_pricing(): Pricing
 {
     static $pricing = null;
