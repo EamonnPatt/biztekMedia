@@ -7,11 +7,9 @@
  * Editing prices: change numbers inside the CONFIG block only. It must stay valid JSON
  * (double quotes, no comments, no trailing commas) because PHP reads it too.
  *
- *   formats.*.base     weekly rate for a 10s spot (every ad plays on every screen, all day)
+ *   formats.*.base     weekly rate for a 10s spot (every ad plays on every screen)
  *   duration.curve     how price grows with length (below 1 = longer spots cost less per second)
- *   zones.*.screens    number of screens in each part of the gym (placeholders)
- *   rotation           hours the screens are on and how often a spot comes round; used for play estimates
- *   taxRate            e.g. 0.05 for 5% GST
+ *   taxRate           e.g. 0.05 for 5% GST
  */
 (function (root, factory) {
   const api = factory();
@@ -28,15 +26,6 @@
       "video": { "label": "Video", "base": 205.72, "accepts": "MP4, WEBM, MOV" }
     },
     "duration": { "min": 10, "max": 60, "curve": 0.75 },
-    "zones": {
-      "entrance": { "label": "Front Desk & Entry",    "screens": 2, "note": "Every member, every visit" },
-      "cardio":   { "label": "Cardio Deck",           "screens": 4, "note": "Longest dwell time on the floor" },
-      "weights":  { "label": "Free Weights",          "screens": 2, "note": "Between-set glances" },
-      "studio":   { "label": "Studio & Classes",      "screens": 1, "note": "Before and after every class" },
-      "recovery": { "label": "Stretch & Recovery",    "screens": 1, "note": "Slow, relaxed attention" },
-      "lounge":   { "label": "Smoothie Bar & Lounge", "screens": 1, "note": "Post-workout hangout" }
-    },
-    "rotation": { "hours": "5am – 11pm", "hoursPerWeek": 126, "playsPerHour": 4 },
     "weeks": { "min": 1, "max": 26 },
     "termDiscounts": [
       { "minWeeks": 12, "rate": 0.20 },
@@ -45,7 +34,7 @@
     ],
     "addons": {
       "priority":     { "label": "Top of loop",   "detail": "Plays first in every rotation", "percent": 0.20 },
-      "audio":        { "label": "Audio on",      "detail": "Sound in zones with speakers",  "perWeek": 15, "formats": ["video"] },
+      "audio":        { "label": "Audio on",      "detail": "Sound on screens with speakers", "perWeek": 15, "formats": ["video"] },
       "designAssist": { "label": "Design assist", "detail": "Our team polishes your ad",     "flat": 49 },
       "rush":         { "label": "Rush approval", "detail": "Reviewed and live within 24h",  "flat": 25 }
     },
@@ -92,7 +81,6 @@
     const n = normalize(input);
     const fmt = CONFIG.formats[n.format];
     const durationMult = durationMultiplier(n.duration);
-    const screens = Object.values(CONFIG.zones).reduce((s, z) => s + z.screens, 0);
 
     const weekly = round2(fmt.base * durationMult);
     const lines = [];
@@ -132,9 +120,6 @@
     const tax = round2(subtotal * CONFIG.taxRate);
     const total = round2(subtotal + tax);
 
-    const playsPerWeek = CONFIG.rotation.playsPerHour * CONFIG.rotation.hoursPerWeek * screens;
-    const totalPlays = playsPerWeek * n.weeks;
-
     return {
       currency: CONFIG.currency,
       input: n,
@@ -144,10 +129,6 @@
       subtotal,
       tax,
       total,
-      screens,
-      playsPerWeek,
-      totalPlays,
-      costPer1000: totalPlays ? round2((total / totalPlays) * 1000) : 0,
     };
   }
 

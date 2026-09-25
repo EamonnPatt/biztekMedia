@@ -12,7 +12,11 @@ declare(strict_types=1);
 
 const ROOT = __DIR__ . '/..';
 define('BZ_PUBLIC', ROOT . '/public_html');
-putenv('BZ_CONFIG_FILE=' . ROOT . '/biztek-private/config.sample.php');
+// Run with blank settings, never the real config.php.
+$blankConfig = tempnam(sys_get_temp_dir(), 'bz-test-config');
+file_put_contents($blankConfig, '<?php return [];');
+register_shutdown_function(fn() => @unlink($blankConfig));
+putenv("BZ_CONFIG_FILE=$blankConfig");
 require ROOT . '/biztek-private/lib/api.php';
 
 $failed = 0;
@@ -36,10 +40,9 @@ function check(string $name, bool $ok, string $detail = ''): void
 section('Pricing');
 $p = bz_pricing();
 $c = $p->config;
-$screens = array_sum(array_column($c['zones'], 'screens'));
 
+check('no zone, time-of-day or plays-per-hour settings are left', !array_intersect(['zones', 'rotation', 'frequencies', 'dayparts'], array_keys($c)));
 $q = $p->quote(['format' => 'text', 'duration' => 10, 'weeks' => 1]);
-check("every ad plays on all $screens screens", $q['screens'] === $screens);
 check('a 10s spot costs the base rate each week', $q['weekly'] == $c['formats']['text']['base']);
 
 $plain = $p->quote(['format' => 'image', 'duration' => 15, 'weeks' => 4]);
@@ -66,7 +69,7 @@ $js = run_node(__DIR__ . '/quote.js', json_encode($cases));
 if ($js === null) {
     echo "  skip  Node.js not found, so the studio's prices weren't compared\n";
 } else {
-    $money = fn(array $q) => [$q['lines'], $q['weekly'], $q['subtotal'], $q['tax'], $q['total'], $q['playsPerWeek'], $q['totalPlays'], $q['costPer1000']];
+    $money = fn(array $q) => [$q['lines'], $q['weekly'], $q['subtotal'], $q['tax'], $q['total']];
     $mismatch = null;
     foreach ($cases as $i => $case) {
         if ($money($p->quote($case)) != $money($js[$i])) { $mismatch = $case; break; }
@@ -103,8 +106,8 @@ foreach (file(ROOT . '/.cpanel.yml') as $line) {
     }
 }
 check('every file the cPanel deploy copies exists', !$missing, 'missing: ' . implode(', ', $missing));
-$sample = require ROOT . '/biztek-private/config.sample.php';
-check('config.sample.php has no passwords or API token in it', $sample['helcim_api_token'] === '' && $sample['db_pass'] === '' && $sample['admin_password'] === '');
+$ignored = preg_split('/\R/', (string) file_get_contents(ROOT . '/.gitignore'));
+check('config.php, with your passwords, is kept out of git', in_array('biztek-private/config.php', $ignored, true));
 
 /* ---------------------------------------------------------------- live site */
 
@@ -113,6 +116,10 @@ if ($site !== '') {
     section("Live site ($site)");
     $config = json_decode(fetch("$site/api.php?r=config")['body'], true);
     check('it takes real card payments (not demo mode)', is_array($config) && ($config['demo'] ?? null) === false, 'api.php?r=config said: ' . json_encode($config));
+
+    // Looking up an order number that can't exist only reads the database.
+    $lookup = fetch("$site/api.php?r=confirm", ['orderId' => 'BZ-000000-000000']);
+    check('it connects to the database', $lookup['status'] === 404, 'api.php said: ' . $lookup['body']);
 
     $http = fetch(preg_replace('~^https://~', 'http://', $site) . '/editor.html');
     check('http:// visits are sent to https://', in_array($http['status'], [301, 302, 307, 308], true) && str_starts_with($http['location'], 'https://'), "got HTTP {$http['status']}");
@@ -140,10 +147,13 @@ function run_node(string $script, string $input): ?array
     return proc_close($proc) === 0 && is_array($data) ? $data : null;
 }
 
-function fetch(string $url): array
+function fetch(string $url, ?array $postJson = null): array
 {
     $ch = curl_init($url);
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => false]);
+    if ($postJson !== null) {
+        curl_setopt_array($ch, [CURLOPT_POSTFIELDS => json_encode($postJson), CURLOPT_HTTPHEADER => ['content-type: application/json']]);
+    }
     // PHP on Windows often ships without a certificate list; use the one Windows keeps.
     if (PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA')) curl_setopt($ch, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
     $body = curl_exec($ch);

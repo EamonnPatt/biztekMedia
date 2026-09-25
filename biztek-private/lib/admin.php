@@ -172,7 +172,7 @@ function admin_orders_page(bool $showAll): void
         $end = !empty($k['startDate']) ? (new DateTime($k['startDate'] . ' 00:00:00', new DateTimeZone('UTC')))->modify('+' . ((int) ($k['weeks'] ?? 1) * 7 - 1) . ' days')->format('Y-m-d') : '';
         // Orders placed before every ad went on every screen still carry their chosen zones.
         $where = empty($k['zones']) ? 'Every screen'
-            : implode(', ', array_map(fn($z) => bz_h($p['zones'][$z]['label'] ?? $z), $k['zones'])) . '<br>' . bz_h(($k['frequency'] ?? '') . '/hr · ' . ($k['daypart'] ?? ''));
+            : bz_h(implode(', ', $k['zones'])) . '<br>' . bz_h(($k['frequency'] ?? '') . '/hr · ' . ($k['daypart'] ?? ''));
         $addons = implode(', ', array_map(fn($a) => bz_h($p['addons'][$a]['label'] ?? $a), array_keys(array_filter($k['addons'] ?? []))));
         $media = implode('<br>', array_map(fn($u) => '<a href="admin.php?download=' . bz_h($u['id']) . '">' . bz_h($u['name']) . '</a> <span class="muted">' . bz_h($u['kind']) . ' · ' . $size((int) $u['size']) . '</span>', $o['uploads'] ?? []));
         $t = $o['transaction'] ?? null;

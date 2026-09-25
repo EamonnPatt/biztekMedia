@@ -7,3 +7,12 @@ RewriteCond %{HTTPS} !=on
 RewriteCond %{HTTP:X-Forwarded-Proto} !=https
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 DirectoryIndex index.html
+
+# Browsers check for a newer copy of the pages, scripts and styles on every visit (unchanged
+# files cost a tiny "not modified" reply), so a deploy shows up straight away instead of
+# visitors seeing an old cached version of the studio or its prices.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|js|css)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

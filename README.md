@@ -1,6 +1,6 @@
 # Biztek Media
 
-Sells ad space on the screens inside the gym. Advertisers build their own video, image or text ad in the **Ad Studio**, pick a schedule, watch the price update live, and pay with **Helcim**. Every ad plays on every screen in the gym, all day.
+Sells ad space on the screens inside the gym. Advertisers build their own video, image or text ad in the **Ad Studio**, pick a schedule, watch the price update live, and pay with **Helcim**. Every ad plays on every screen in the gym.
 
 Runs on ordinary PHP web hosting with a MySQL database, such as GoDaddy cPanel hosting. No Node.js needed.
 
@@ -12,7 +12,7 @@ public_html/       the website: upload its contents into your host's public_html
   admin.php          orders page
   css/ js/ img/
 biztek-private/    code and settings: upload next to public_html, NOT inside it
-  config.sample.php  copy to config.php and fill in
+  config.php         your settings and passwords: you create it (step 2), it is never in git
   lib/               PHP code (API, orders page, pricing)
   storage/           created automatically: uploaded videos/images and sign-ins
 ```
@@ -26,8 +26,26 @@ biztek-private/    code and settings: upload next to public_html, NOT inside it
 
 You can also reuse a database you already have: the tables are named `bz_orders` and `bz_uploads`, so they won't clash with anything.
 
-**2. Settings.** In `biztek-private`, copy `config.sample.php` to `config.php` and fill in:
-- `db_name`, `db_user`, `db_pass`: the full names from step 1.
+**2. Settings.** In `biztek-private`, create `config.php` with this in it:
+
+```php
+<?php
+return [
+    'db_host' => 'localhost',
+    'db_name' => '',
+    'db_user' => '',
+    'db_pass' => '',
+    'helcim_api_token' => '',
+    'admin_password' => '',
+    'notify_email' => '',
+    'from_email' => '',
+    'timezone' => 'America/Toronto',
+    'max_upload_mb' => 250,
+];
+```
+
+Then fill in:
+- `db_name`, `db_user`, `db_pass`: the full names from step 1, exactly as cPanel shows them. Capitals count.
 - `admin_password`: the password for your orders page.
 - `notify_email`: where new orders are emailed. Optional.
 - `from_email`: an address on your own domain, such as `info@biztekmedia.ca`. Order emails and customer receipts come from it, and customers reply to it.
@@ -62,7 +80,7 @@ php tests/run.php                           # pricing, payment signature checks,
 php tests/run.php https://biztekmedia.ca    # also checks the live site after you deploy
 ```
 
-The live checks confirm the site is out of demo mode, sends `http://` to `https://`, and runs the same prices as your code, which shows the latest commit was deployed.
+The live checks confirm the site is out of demo mode, reaches its database, sends `http://` to `https://`, and runs the same prices as your code, which shows the latest commit was deployed.
 
 ## Deploy from GitHub (optional)
 
@@ -99,12 +117,10 @@ Each customer is emailed a receipt when they pay: order number, campaign, price 
 
 Uploaded files live in `biztek-private/storage/uploads`. Watch your hosting disk space; `max_upload_mb` in `config.php` caps each file. Uploads that were started but never finished are cleaned up after a day.
 
-## Change prices, zones and screens
+## Change prices
 
-All rates live in the `CONFIG` block at the top of `public_html/js/pricing.js`:
-- base rates (the weekly price for a 10s spot on every screen) and the length curve
-- zones, with their names and screen counts (shown on the landing page and used for the play estimates)
-- rotation: the screens' hours and how often a spot comes round, also for the play estimates
+Every ad plays on every screen, so the price depends only on the format, the length, the number of weeks and the add-ons. All rates live in the `CONFIG` block at the top of `public_html/js/pricing.js`:
+- base rates (the weekly price for a 10s spot) and the length curve
 - term discounts, add-ons, minimum order, currency and tax
 
 The landing page, the studio and the PHP server all read that one block, so a change shows up everywhere.
@@ -112,7 +128,6 @@ The landing page, the studio and the PHP server all read that one block, so a ch
 **Keep it valid JSON:** double quotes, no comments, no trailing commas. The server reads it too. If you change the *formulas* (not just the numbers), update `biztek-private/lib/pricing.php` to match.
 
 **Before launch:** these are placeholders. Set them to match the real gym and your policies:
-- the zone names and screen counts
 - the review times (48h, or 24h with rush)
 - the content guidelines in the FAQ
 - the currency (`CAD`)

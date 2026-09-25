@@ -10,4 +10,4 @@ deployment:
     - /bin/mkdir -p $SITEDIR $HOMEDIR/biztek-private
     - /bin/cp -R public_html/. $SITEDIR/
     - /bin/cp -R biztek-private/lib $HOMEDIR/biztek-private/
-    - /bin/cp biztek-private/.htaccess biztek-private/config.sample.php $HOMEDIR/biztek-private/
+    - /bin/cp biztek-private/.htaccess $HOMEDIR/biztek-private/

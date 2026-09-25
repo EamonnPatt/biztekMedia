@@ -129,7 +129,6 @@ final class Pricing
         $n = $this->normalize($input);
         $fmt = $c['formats'][$n['format']];
         $durationMult = $this->durationMultiplier($n['duration']);
-        $screens = array_sum(array_column($c['zones'], 'screens'));
 
         $weekly = self::round2($fmt['base'] * $durationMult);
         $lines = [];
@@ -172,9 +171,6 @@ final class Pricing
         $tax = self::round2($subtotal * $c['taxRate']);
         $total = self::round2($subtotal + $tax);
 
-        $playsPerWeek = $c['rotation']['playsPerHour'] * $c['rotation']['hoursPerWeek'] * $screens;
-        $totalPlays = $playsPerWeek * $n['weeks'];
-
         return [
             'currency' => $c['currency'],
             'input' => $n,
@@ -184,10 +180,6 @@ final class Pricing
             'subtotal' => $subtotal,
             'tax' => $tax,
             'total' => $total,
-            'screens' => $screens,
-            'playsPerWeek' => $playsPerWeek,
-            'totalPlays' => $totalPlays,
-            'costPer1000' => $totalPlays ? self::round2(($total / $totalPlays) * 1000) : 0,
         ];
     }
 }

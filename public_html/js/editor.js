@@ -1629,7 +1629,6 @@
     const today = isoDate(new Date());
     dom.campaign.innerHTML = `
       ${H.section('Spot length', H.range('D.duration', 'Seconds each time it plays', PC.duration.min, PC.duration.max, 1, { fmt: 's' }))}
-      ${H.section('Where it plays', `<div class="tier-card"><b>Every screen</b><p>Your ad runs on all ${currentQuote().screens} screens in the gym, ${esc(PC.rotation.hours)}.</p></div>`)}
       ${H.section('Schedule', `<div class="pgrid">
           <label class="f full"><span>Start date</span><input type="date" data-bind="C.startDate" min="${today}"></label>
           <label class="f full"><span>Run length</span><input type="range" class="rng" data-bind="C.weeks" min="${PC.weeks.min}" max="${PC.weeks.max}" step="1"></label>
@@ -1692,11 +1691,6 @@
       <hr>
       ${tax}
       <div class="r-row r-total"><span>Total</span><span class="r-amt">${money(q.total)}</span></div>
-      <hr>
-      <div class="r-row r-meta"><span>Screens</span><span>${q.screens}</span></div>
-      <div class="r-row r-meta"><span>Plays per week</span><span>${q.playsPerWeek.toLocaleString()}</span></div>
-      <div class="r-row r-meta"><span>Total plays</span><span>${q.totalPlays.toLocaleString()}</span></div>
-      <div class="r-row r-meta"><span>Cost per 1,000 plays</span><span>${money(q.costPer1000)}</span></div>
       <p class="r-meta" style="text-align:center;margin:12px 0 0">All prices in ${esc(q.currency)}</p>`;
   }
 

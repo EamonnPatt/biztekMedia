@@ -26,12 +26,8 @@
   links.addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
 
   /* ---------------------------------------------------------- facts from config */
-  const zoneKeys = Object.keys(C.zones);
   const facts = {
     from: money(Math.min(...Object.values(C.formats).map((f) => f.base))).replace('.00', ''),
-    zones: zoneKeys.length,
-    screens: zoneKeys.reduce((s, k) => s + C.zones[k].screens, 0),
-    hours: C.rotation.hours,
   };
   $$('[data-fact]').forEach((el) => {
     const v = facts[el.dataset.fact];
@@ -118,25 +114,7 @@
       </div>`).join('')}
     <hr>
     <div class="r-row r-total"><span>Total</span><span class="r-amt">${money(q.total)}</span></div>
-    <hr>
-    <div class="r-row r-meta"><span>Plays over ${q.input.weeks} weeks</span><span>${q.totalPlays.toLocaleString()}</span></div>
-    <div class="r-row r-meta"><span>Cost per 1,000 plays</span><span>${money(q.costPer1000)}</span></div>
     <a class="btn btn-orange" href="editor.html?start=image">Build one like this →</a>`;
-
-  /* ---------------------------------------------------------- floor plan */
-  $('#floorplan').innerHTML = zoneKeys.map((k) => {
-    const z = C.zones[k];
-    const count = `${z.screens} screen${z.screens > 1 ? 's' : ''}`;
-    return `
-      <div class="zone zone--${k}" style="grid-area:${k}">
-        <h3>${esc(z.label)}</h3>
-        <p>${esc(z.note)}</p>
-        <div class="zone-foot">
-          <span class="zone-screens" aria-hidden="true">${'<i></i>'.repeat(z.screens)}</span>
-          <span class="zone-count">${count}</span>
-        </div>
-      </div>`;
-  }).join('');
 
   /* ---------------------------------------------------------- sample ads on the TV */
   const qr = $('.si-qr');

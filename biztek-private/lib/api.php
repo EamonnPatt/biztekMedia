@@ -214,7 +214,7 @@ function api_checkout(): never
         'campaign' => $q['input'] + ['startDate' => $startDate],
         'quote' => [
             'currency' => $q['currency'], 'weekly' => $q['weekly'], 'lines' => $q['lines'], 'subtotal' => $q['subtotal'],
-            'tax' => $q['tax'], 'total' => $q['total'], 'playsPerWeek' => $q['playsPerWeek'], 'totalPlays' => $q['totalPlays'],
+            'tax' => $q['tax'], 'total' => $q['total'],
         ],
         'composition' => $composition,
         'uploads' => $uploads,
@@ -443,7 +443,7 @@ function notify_new_order(array $order): void
         . ($c['website'] ? "Website: {$c['website']}\n" : '')
         . ($c['notes'] ? "Notes: {$c['notes']}\n" : '')
         . "\nStarts {$k['startDate']} for {$k['weeks']} week(s)\n"
-        . "Every screen, {$p['rotation']['hours']}\n"
+        . "Every screen\n"
         . "Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']}s\nFiles:\n$files\n\n"
         . "Review it: " . bz_site_url() . "/admin.php\n";
 
@@ -501,9 +501,8 @@ function order_receipt_text(array $order): string
         . "Order: {$order['id']}\nDate: $paidOn\nBusiness: {$c['business']}\n\n"
         . "Your campaign\n"
         . "  Starts: $startOn, for $weeks\n"
-        . "  Where: every screen in the gym, {$p['rotation']['hours']}\n"
-        . "  Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']} seconds, {$order['composition']['orientation']}\n"
-        . "  Estimated plays: " . number_format($q['playsPerWeek']) . " per week, " . number_format($q['totalPlays']) . " in total\n\n"
+        . "  Where: every screen in the gym\n"
+        . "  Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']} seconds, {$order['composition']['orientation']}\n\n"
         . "Price\n$prices\n"
         . "$payment\n"
         . "What happens next\n"

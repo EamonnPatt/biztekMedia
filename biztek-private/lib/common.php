@@ -36,7 +36,7 @@ function bz_config(): array
 
     $file = getenv('BZ_CONFIG_FILE') ?: BZ_PRIVATE . '/config.php';
     if (!is_file($file)) {
-        throw new HttpError(500, 'Setup incomplete: copy config.sample.php to config.php in the biztek-private folder and fill it in.');
+        throw new HttpError(500, 'Setup incomplete: create config.php in the biztek-private folder (the README shows what goes in it).');
     }
     $loaded = require $file;
     $config = array_merge([
@@ -116,7 +116,15 @@ function bz_db(): PDO
         ]);
     } catch (PDOException $e) {
         error_log('[biztek] database connection failed: ' . $e->getMessage());
-        throw new HttpError(500, "We couldn't reach the database. Check the database details in config.php.");
+        // Say which setting is wrong, without showing any of the values.
+        $hint = match (preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? $m[1] : '') {
+            '1045' => 'The database user or password (db_user, db_pass) is wrong.',
+            '1044' => 'The database user has no access to this database: in cPanel → MySQL Databases, add the user to the database with ALL PRIVILEGES.',
+            '1049' => 'No database has that name (db_name). Copy it exactly from cPanel → MySQL Databases: capitals count.',
+            '2002', '2005' => 'The database server (db_host) can\'t be found. On cPanel hosting it is usually "localhost".',
+            default => 'Check the database details.',
+        };
+        throw new HttpError(500, "We couldn't reach the database. $hint (config.php)");
     }
     $pdo->exec("SET time_zone = '+00:00'");
     bz_ensure_schema($pdo);
