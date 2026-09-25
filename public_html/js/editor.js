@@ -1628,6 +1628,7 @@
   function buildCampaign() {
     const today = isoDate(new Date());
     dom.campaign.innerHTML = `
+      ${H.section('Your booking', '<div class="tier-card booking-sum" id="bookingSummary"></div>')}
       ${H.section('Spot length', H.range('D.duration', 'Seconds each time it plays', PC.duration.min, PC.duration.max, 1, { fmt: 's' }))}
       ${H.section('Schedule', `<div class="pgrid">
           <label class="f full"><span>Start date</span><input type="date" data-bind="C.startDate" min="${today}"></label>
@@ -1648,7 +1649,7 @@
     if (wo) {
       wo.textContent = weeks;
       $('#weeksWord').textContent = weeks === 1 ? 'week' : 'weeks';
-      if (campaign.startDate) $('#endDate').textContent = `${fmtDate(campaign.startDate)} → ${fmtDate(isoDate(addDays(parseIso(campaign.startDate), weeks * 7 - 1)))}`;
+      if (campaign.startDate) $('#endDate').textContent = `${fmtDate(campaign.startDate)} → ${fmtDate(runEnd())}`;
       const rate = P.termDiscountRate(weeks);
       const active = PC.termDiscounts.find((td) => td.rate === rate);
       $$('#termChips span').forEach((s) => s.classList.toggle('is-on', !!active && Number(s.dataset.min) === active.minWeeks));
@@ -1664,6 +1665,24 @@
   }
 
   const currentQuote = () => P.quote({ ...campaign, format: detectFormat(), duration: doc.duration });
+  const runEnd = () => isoDate(addDays(parseIso(campaign.startDate), campaign.weeks * 7 - 1));
+
+  // What the customer is buying, in plain words, above the controls that change it.
+  function bookingSummaryHtml(q) {
+    const fmt = PC.formats[q.input.format].label;
+    const weeks = `${q.input.weeks} week${q.input.weeks === 1 ? '' : 's'}`;
+    const extras = Object.keys(PC.addons).filter((k) => q.input.addons[k]).map((k) => esc(PC.addons[k].label));
+    return `
+      <b>${fmt} ad on every screen</b>
+      <dl>
+        <dt>Your ad</dt><dd>${fmt}, ${q.input.duration} seconds each time it plays</dd>
+        <dt>Where</dt><dd>Every screen in the gym</dd>
+        <dt>Runs</dt><dd>${campaign.startDate ? `${fmtDate(campaign.startDate)} → ${fmtDate(runEnd())} (${weeks})` : `${weeks}, once you pick a start date`}</dd>
+        <dt>Extras</dt><dd>${extras.join(', ') || 'None'}</dd>
+        <dt>Review</dt><dd>We check your ad within ${q.input.addons.rush ? '24 hours (rush)' : '48 hours'} before it goes live</dd>
+        <dt>Total</dt><dd class="bs-total">${money(q.total)} ${esc(q.currency)}</dd>
+      </dl>`;
+  }
 
   function receiptHtml(q, title = 'Your quote') {
     const f = q.factors;
@@ -1718,6 +1737,8 @@
     dom.rfSummary.textContent = `${fmt} · ${q.input.duration}s · every screen · ${q.input.weeks} wk`;
     const receipt = $('#quoteReceipt');
     if (receipt) receipt.innerHTML = receiptHtml(q);
+    const summary = $('#bookingSummary');
+    if (summary) summary.innerHTML = bookingSummaryHtml(q);
     const tier = $('.tier-card', dom.props);
     if (tier) {
       tier.querySelector('b').textContent = `${fmt} rate`;
