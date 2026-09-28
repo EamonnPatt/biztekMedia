@@ -99,7 +99,7 @@ To publish later changes: push to GitHub, then in cPanel click **Update from Rem
 ## How a payment works
 
 1. The studio uploads each video or image **in small pieces**. The piece size adapts to your host's PHP upload limit, so large videos work on shared hosting without changing any PHP settings. Each file is checked to be the image or video type it claims to be.
-2. `api.php?r=checkout` recalculates the price **on the server** and saves a pending order. The rate comes from the real uploaded files, not from what the browser says. It then asks Helcim for a secure checkout session.
+2. `api.php?r=checkout` recalculates the price **on the server** and saves a pending order. The ad type comes from the real uploaded files, not from what the browser says. It then asks Helcim for a secure checkout session.
 3. Helcim's card form opens. Card details go straight to Helcim.
 4. On success, `api.php?r=confirm` checks Helcim's signature with a secret only the server knows. If the signature can't be reproduced, it asks Helcim's API directly. Before marking the order paid it also checks that:
    - the payment is approved,
@@ -119,9 +119,11 @@ Uploaded files live in `biztek-private/storage/uploads`. Watch your hosting disk
 
 ## Change prices
 
-Every ad plays on every screen, so the price depends only on the format, the length, the number of weeks and the add-ons. All rates live in the `CONFIG` block at the top of `public_html/js/pricing.js`:
-- base rates (the weekly price for a 10s spot) and the length curve
-- term discounts, add-ons, minimum order, currency and tax
+Every ad is a 6-second spot on every screen, and video, image and text cost the same. The price depends only on how often the ad plays, how many 4-week blocks it runs, and the add-ons. All rates live in the `CONFIG` block at the top of `public_html/js/pricing.js`:
+- `plays`: each play rate (1 play per minute, or per 2, 3 or 4 minutes) and its price for 4 weeks
+- `periodWeeks` and `weeks`: runs are booked in 4-week blocks, from 4 to 24 weeks
+- `duration`: the spot length in seconds
+- add-ons, minimum order, currency and tax (`taxRate` 0.13 adds 13% HST on top of the listed prices)
 
 The landing page, the studio and the PHP server all read that one block, so a change shows up everywhere.
 

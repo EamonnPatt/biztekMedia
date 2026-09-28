@@ -7,9 +7,10 @@
  * Editing prices: change numbers inside the CONFIG block only. It must stay valid JSON
  * (double quotes, no comments, no trailing commas) because PHP reads it too.
  *
- *   formats.*.base     weekly rate for a 10s spot (every ad plays on every screen)
- *   duration.curve     how price grows with length (below 1 = longer spots cost less per second)
- *   taxRate           e.g. 0.05 for 5% GST
+ *   plays          how often the ad plays, and its price for every periodWeeks weeks
+ *   periodWeeks    the weeks each plays price covers; runs are booked in blocks of this many weeks
+ *   duration       every spot is this many seconds long
+ *   taxRate        e.g. 0.13 for 13% HST, added on top of the listed prices
  */
 (function (root, factory) {
   const api = factory();
@@ -21,17 +22,20 @@
   const CONFIG = /*BZ-CONFIG-START*/{
     "currency": "CAD",
     "formats": {
-      "text":  { "label": "Text",  "base": 77.15,  "accepts": "Just type — no files needed" },
-      "image": { "label": "Image", "base": 128.57, "accepts": "JPG, PNG, WEBP, GIF" },
-      "video": { "label": "Video", "base": 205.72, "accepts": "MP4, WEBM, MOV" }
+      "text":  { "label": "Text",  "accepts": "Just type — no files needed" },
+      "image": { "label": "Image", "accepts": "JPG, PNG, WEBP, GIF" },
+      "video": { "label": "Video", "accepts": "MP4, WEBM, MOV" }
     },
-    "duration": { "min": 10, "max": 60, "curve": 0.75 },
-    "weeks": { "min": 1, "max": 26 },
-    "termDiscounts": [
-      { "minWeeks": 12, "rate": 0.20 },
-      { "minWeeks": 8,  "rate": 0.15 },
-      { "minWeeks": 4,  "rate": 0.10 }
+    "duration": { "min": 6, "max": 6 },
+    "plays": [
+      { "every": 1, "label": "1 play per minute",    "price": 5000 },
+      { "every": 2, "label": "1 play per 2 minutes", "price": 2500 },
+      { "every": 3, "label": "1 play per 3 minutes", "price": 1660 },
+      { "every": 4, "label": "1 play per 4 minutes", "price": 1250 }
     ],
+    "defaultEvery": 4,
+    "periodWeeks": 4,
+    "weeks": { "min": 4, "max": 24 },
     "addons": {
       "priority":     { "label": "Top of loop",   "detail": "Plays first in every rotation", "percent": 0.20 },
       "audio":        { "label": "Audio on",      "detail": "Sound on screens with speakers", "perWeek": 15, "formats": ["video"] },
@@ -39,67 +43,49 @@
       "rush":         { "label": "Rush approval", "detail": "Reviewed and live within 24h",  "flat": 25 }
     },
     "minimumOrder": 25,
-    "taxRate": 0,
-    "taxLabel": "Tax"
+    "taxRate": 0.13,
+    "taxLabel": "HST"
   }/*BZ-CONFIG-END*/;
 
   const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-  const round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
-  function durationMultiplier(seconds) {
-    const d = clamp(Math.round(Number(seconds) || CONFIG.duration.min), CONFIG.duration.min, CONFIG.duration.max);
-    return round3(Math.pow(d / 10, CONFIG.duration.curve));
-  }
-
-  /** Weekly rate on every screen — used by the public rate card. */
-  function spotRate(format, seconds) {
-    const f = CONFIG.formats[format] || CONFIG.formats.text;
-    return round2(f.base * durationMultiplier(seconds));
-  }
-
-  function termDiscountRate(weeks) {
-    const tier = CONFIG.termDiscounts.find((t) => weeks >= t.minWeeks);
-    return tier ? tier.rate : 0;
+  /** The plays option for "1 play every N minutes", falling back to the default one. */
+  function plan(every) {
+    const n = Number(every);
+    return CONFIG.plays.find((p) => p.every === n) || CONFIG.plays.find((p) => p.every === CONFIG.defaultEvery);
   }
 
   function normalize(input) {
     const i = input || {};
     const format = CONFIG.formats[i.format] ? i.format : 'text';
-    const duration = clamp(Math.round(Number(i.duration) || 15), CONFIG.duration.min, CONFIG.duration.max);
-    const weeks = clamp(Math.round(Number(i.weeks) || 1), CONFIG.weeks.min, CONFIG.weeks.max);
+    const duration = clamp(Math.round(Number(i.duration) || CONFIG.duration.min), CONFIG.duration.min, CONFIG.duration.max);
+    const every = plan(i.every).every;
+    // Runs are sold in whole periods, so round to the nearest one.
+    const per = CONFIG.periodWeeks;
+    const weeks = clamp(Math.round((Number(i.weeks) || per) / per) * per, CONFIG.weeks.min, CONFIG.weeks.max);
     const addons = {
       priority: !!(i.addons && i.addons.priority),
       audio: !!(i.addons && i.addons.audio) && CONFIG.addons.audio.formats.includes(format),
       designAssist: !!(i.addons && i.addons.designAssist),
       rush: !!(i.addons && i.addons.rush),
     };
-    return { format, duration, weeks, addons };
+    return { format, duration, every, weeks, addons };
   }
 
   function quote(input) {
     const n = normalize(input);
-    const fmt = CONFIG.formats[n.format];
-    const durationMult = durationMultiplier(n.duration);
-
-    const weekly = round2(fmt.base * durationMult);
+    const p = plan(n.every);
+    const periods = n.weeks / CONFIG.periodWeeks;
     const lines = [];
 
-    const airtime = round2(weekly * n.weeks);
-    lines.push({ key: 'airtime', label: `${fmt.label} airtime`, detail: `${n.weeks} wk × ${money(weekly)}`, amount: airtime });
+    const airtime = round2(p.price * periods);
+    lines.push({ key: 'airtime', label: p.label, detail: `${n.weeks} wk · ${periods} × ${money(p.price)}`, amount: airtime });
 
-    let discountable = airtime;
     if (n.addons.priority) {
       const amt = round2(airtime * CONFIG.addons.priority.percent);
-      discountable = round2(discountable + amt);
       lines.push({ key: 'priority', label: CONFIG.addons.priority.label, detail: `+${CONFIG.addons.priority.percent * 100}%`, amount: amt });
     }
-
-    const termRate = termDiscountRate(n.weeks);
-    if (termRate > 0 && discountable > 0) {
-      lines.push({ key: 'term', label: 'Term discount', detail: `−${Math.round(termRate * 100)}% for ${n.weeks} wk`, amount: -round2(discountable * termRate) });
-    }
-
     if (n.addons.audio) {
       lines.push({ key: 'audio', label: CONFIG.addons.audio.label, detail: `${n.weeks} wk × ${money(CONFIG.addons.audio.perWeek)}`, amount: round2(CONFIG.addons.audio.perWeek * n.weeks) });
     }
@@ -123,8 +109,8 @@
     return {
       currency: CONFIG.currency,
       input: n,
-      factors: { base: fmt.base, durationMult },
-      weekly,
+      plan: p,
+      periods,
       lines,
       subtotal,
       tax,
@@ -137,5 +123,5 @@
     return sign + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  return { CONFIG, quote, normalize, spotRate, durationMultiplier, termDiscountRate, money, round2 };
+  return { CONFIG, quote, normalize, plan, money, round2 };
 });

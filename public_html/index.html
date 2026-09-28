@@ -27,6 +27,7 @@
       <a href="#pricing">Pricing</a>
       <a href="#how">How it works</a>
       <a href="#faq">FAQ</a>
+      <a href="#contact">Contact</a>
     </nav>
     <a class="btn btn-ink nav-cta" href="editor.html">Build your ad <span aria-hidden="true">→</span></a>
     <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navLinks" aria-label="Open menu">
@@ -47,8 +48,8 @@
           <a class="btn btn-ghost btn-lg" href="#pricing">See pricing</a>
         </div>
         <ul class="hero-facts">
-          <li><b>10–60s</b><span>spot lengths</span></li>
-          <li><b data-fact="from">$15</b><span>per week, from</span></li>
+          <li><b>6s</b><span>every spot</span></li>
+          <li><b data-fact="from">$1,250</b><span>per 4 weeks, from</span></li>
           <li><b>All</b><span>screens, every ad</span></li>
         </ul>
       </div>
@@ -58,26 +59,26 @@
         <div class="tv">
           <div class="tv-screen" id="tvScreen">
             <!-- Sample ads, for illustration only -->
-            <div class="slide slide-video is-active" data-len="15">
+            <div class="slide slide-video is-active" data-len="6">
               <div class="sv-blobs" aria-hidden="true"><i></i><i></i><i></i></div>
               <p class="sv-brand">FUEL KITCHEN</p>
               <p class="sv-head">Post-workout<br>bowls <em>2&#8209;for&#8209;1</em></p>
               <p class="sv-sub">Tues &amp; Thurs · right next door</p>
-              <span class="slide-tag">VIDEO · 15s</span>
+              <span class="slide-tag">VIDEO · 6s</span>
             </div>
-            <div class="slide slide-image" data-len="10">
+            <div class="slide slide-image" data-len="6">
               <div class="si-photo" aria-hidden="true"><i></i><i></i></div>
               <div class="si-copy">
                 <p class="si-brand">PEAK PHYSIO</p>
                 <p class="si-head">Sore?<br>Book a sports massage.</p>
                 <div class="si-qr" aria-hidden="true"></div>
               </div>
-              <span class="slide-tag">IMAGE · 10s</span>
+              <span class="slide-tag">IMAGE · 6s</span>
             </div>
-            <div class="slide slide-text" data-len="10">
+            <div class="slide slide-text" data-len="6">
               <p class="st-head">Now hiring<br>personal<br>trainers</p>
               <p class="st-sub">Ask at the front desk →</p>
-              <span class="slide-tag">TEXT · 10s</span>
+              <span class="slide-tag">TEXT · 6s</span>
             </div>
             <div class="tv-progress" aria-hidden="true"><span id="tvProgress"></span></div>
           </div>
@@ -94,8 +95,8 @@
         <span>SWEAT EQUITY ✺ LOCAL REACH ✺ REAL ATTENTION ✺ SWEAT EQUITY ✺ LOCAL REACH ✺ REAL ATTENTION ✺ </span>
       </div></div>
       <div class="marquee marquee--front"><div class="marquee-track">
-        <span>VIDEO ✺ IMAGE ✺ TEXT ✺ 10–60 SECONDS ✺ LIVE PRICING ✺ PAY ONLINE ✺ </span>
-        <span>VIDEO ✺ IMAGE ✺ TEXT ✺ 10–60 SECONDS ✺ LIVE PRICING ✺ PAY ONLINE ✺ </span>
+        <span>VIDEO ✺ IMAGE ✺ TEXT ✺ 6-SECOND SPOTS ✺ LIVE PRICING ✺ PAY ONLINE ✺ </span>
+        <span>VIDEO ✺ IMAGE ✺ TEXT ✺ 6-SECOND SPOTS ✺ LIVE PRICING ✺ PAY ONLINE ✺ </span>
       </div></div>
     </div>
 
@@ -125,8 +126,8 @@
       <dl class="why-stats reveal">
         <div><dt>Screens</dt><dd>All</dd></div>
         <div><dt>Ad formats</dt><dd>3</dd></div>
-        <div><dt>Run length</dt><dd>1–26<small>wk</small></dd></div>
-        <div><dt>Spot lengths</dt><dd>10–60<small>s</small></dd></div>
+        <div><dt>Run length</dt><dd>4–24<small>wk</small></dd></div>
+        <div><dt>Spot length</dt><dd>6<small>s</small></dd></div>
       </dl>
     </section>
 
@@ -140,18 +141,9 @@
         <div class="length-control reveal">
           <div class="length-label">
             <span>Spot length</span>
-            <output id="lenOut" for="lenRange">15s</output>
+            <output>6s</output>
           </div>
-          <input type="range" id="lenRange" min="10" max="60" step="1" value="15" aria-label="Spot length in seconds">
-          <div class="length-chips" id="lenChips">
-            <button type="button" data-len="10">10s</button>
-            <button type="button" data-len="15" class="is-on">15s</button>
-            <button type="button" data-len="20">20s</button>
-            <button type="button" data-len="30">30s</button>
-            <button type="button" data-len="45">45s</button>
-            <button type="button" data-len="60">60s</button>
-          </div>
-          <p class="length-note">Drag to see the weekly price. Every ad plays on every screen.</p>
+          <p class="length-note">Every ad is a 6-second spot on every screen. Video, image or text, the price is the same: it only depends on how often your ad plays.</p>
         </div>
       </div>
 
@@ -163,8 +155,8 @@
           </div>
           <h3>Video</h3>
           <p>Motion grabs attention. Upload a clip, trim it, then layer your offer and logo on top.</p>
-          <div class="fcard-price"><span class="amt" data-price>$0.00</span><span class="per">/ week<br>every screen</span></div>
-          <p class="fcard-sec" data-persec></p>
+          <div class="fcard-price"><span class="amt" data-fact="from">$1,250</span><span class="per">from, per 4 weeks<br>+ HST</span></div>
+          <p class="fcard-sec">6-second spot · every screen</p>
           <ul class="fcard-list">
             <li>MP4, WEBM or MOV up to 250&nbsp;MB</li>
             <li>Trim, loop and overlay text</li>
@@ -176,12 +168,12 @@
         <article class="fcard fcard--image reveal" data-format="image">
           <div class="fcard-top">
             <span class="fcard-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 17l5-6 4 4 2-2 3 4z"/><circle cx="16" cy="9" r="1.8"/></svg></span>
-            <span class="fcard-tag">Best value</span>
+            <span class="fcard-tag">QR-code ready</span>
           </div>
           <h3>Image</h3>
           <p>A strong still, a clear offer and a QR code. Add motion with animated text and shapes.</p>
-          <div class="fcard-price"><span class="amt" data-price>$0.00</span><span class="per">/ week<br>every screen</span></div>
-          <p class="fcard-sec" data-persec></p>
+          <div class="fcard-price"><span class="amt" data-fact="from">$1,250</span><span class="per">from, per 4 weeks<br>+ HST</span></div>
+          <p class="fcard-sec">6-second spot · every screen</p>
           <ul class="fcard-list">
             <li>JPG, PNG, WEBP or GIF</li>
             <li>Animated text and badges</li>
@@ -197,8 +189,8 @@
           </div>
           <h3>Text</h3>
           <p>No files needed. Bold type, brand colours and simple motion. Live in minutes.</p>
-          <div class="fcard-price"><span class="amt" data-price>$0.00</span><span class="per">/ week<br>every screen</span></div>
-          <p class="fcard-sec" data-persec></p>
+          <div class="fcard-price"><span class="amt" data-fact="from">$1,250</span><span class="per">from, per 4 weeks<br>+ HST</span></div>
+          <p class="fcard-sec">6-second spot · every screen</p>
           <ul class="fcard-list">
             <li>Just type</li>
             <li>Templates to start from</li>
@@ -214,7 +206,7 @@
       <div class="pricing-head reveal">
         <p class="kicker">02 — Pricing</p>
         <h2 class="display-2">No quotes.<br>No sales calls.</h2>
-        <p class="lede">Your price is built from three choices. The ad studio shows the total live as you edit, and it's exactly what you pay at checkout.</p>
+        <p class="lede">Pick how often your 6-second spot plays. Prices are per 4 weeks, plus HST. The ad studio shows the total live as you edit, and it's exactly what you pay at checkout.</p>
       </div>
 
       <div class="stack" id="priceStack"><!-- rendered from pricing.js --></div>
@@ -243,7 +235,7 @@
         <li class="step reveal">
           <span class="step-num">02</span>
           <h3>Schedule</h3>
-          <p>Pick a start date and how many weeks it runs. It plays on every screen in the gym.</p>
+          <p>Pick how often it plays, a start date and how many 4-week blocks it runs. It plays on every screen in the gym.</p>
         </li>
         <li class="step reveal">
           <span class="step-num">03</span>
@@ -267,11 +259,11 @@
       <div class="faq-list">
         <details class="reveal">
           <summary>What files can I upload?</summary>
-          <p>Video: MP4, WEBM or MOV up to 250&nbsp;MB. MP4 with H.264 is the safest choice. Images: JPG, PNG, WEBP or GIF. Screens are 1920×1080 landscape, and you can also design in 1080×1920 portrait.</p>
+          <p>Video: MP4, WEBM or MOV up to 250&nbsp;MB. MP4 with H.264 is the safest choice. If your clip is longer than 6 seconds, you choose which part plays. Images: JPG, PNG, WEBP or GIF. Screens are 1920×1080 landscape, and you can also design in 1080×1920 portrait.</p>
         </details>
         <details class="reveal">
-          <summary>Which ad type am I charged for?</summary>
-          <p>The studio charges for the richest media in your ad. Any video layer bills at the video rate, any image at the image rate, and text and shapes on their own bill at the text rate. The live price shows which rate applies.</p>
+          <summary>Does the ad type change the price?</summary>
+          <p>No. Video, image and text ads all cost the same. Every spot is 6 seconds long, and the price depends only on how often it plays, from once every 4 minutes to once a minute. Prices are for 4 weeks at a time, plus HST.</p>
         </details>
         <details class="reveal">
           <summary>Where will my ad play?</summary>
@@ -300,6 +292,37 @@
         <a class="btn btn-ink btn-lg" href="editor.html">Open the ad studio <span aria-hidden="true">→</span></a>
       </div>
     </section>
+
+    <!-- ============================== ABOUT -->
+    <section class="section about" id="about">
+      <p class="kicker reveal">05 — About us</p>
+      <h2 class="about-statement reveal">Empowering businesses through technology, innovation &amp; community engagement.</h2>
+      <div class="about-where reveal">
+        <h3>Where we work</h3>
+        <p>Headquartered in Cobourg, Ontario and proudly supporting organizations throughout Northumberland County and the Greater Toronto Area.</p>
+      </div>
+    </section>
+
+    <!-- ============================== CONTACT -->
+    <section class="section contact" id="contact">
+      <div class="reveal">
+        <p class="kicker">06 — Contact</p>
+        <h2 class="display-2">Contact<br>us.</h2>
+        <p class="lede">Questions about your ad, the screens or an order? Send us an email or drop by.</p>
+      </div>
+      <address class="contact-list">
+        <a class="contact-row reveal" href="mailto:anthony@thebiztekgroup.com">
+          <span class="contact-label">Email</span>
+          <span class="contact-value">anthony@<wbr>thebiztekgroup.com</span>
+          <span class="contact-go" aria-hidden="true">→</span>
+        </a>
+        <a class="contact-row reveal" href="https://www.google.com/maps/search/?api=1&amp;query=1111+Elgin+St+W%2C+Cobourg%2C+ON+K9A+5H7" target="_blank" rel="noopener">
+          <span class="contact-label">Visit</span>
+          <span class="contact-value">1111 Elgin St W<br>Cobourg, Ontario K9A&nbsp;5H7</span>
+          <span class="contact-go" aria-hidden="true">↗</span>
+        </a>
+      </address>
+    </section>
   </main>
 
   <footer class="footer">
@@ -312,6 +335,7 @@
         <a href="#formats">Formats</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
+        <a href="#contact">Contact</a>
         <a href="editor.html">Ad studio</a>
       </nav>
     </div>

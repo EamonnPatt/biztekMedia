@@ -41,26 +41,36 @@ section('Pricing');
 $p = bz_pricing();
 $c = $p->config;
 
-check('no zone, time-of-day or plays-per-hour settings are left', !array_intersect(['zones', 'rotation', 'frequencies', 'dayparts'], array_keys($c)));
-$q = $p->quote(['format' => 'text', 'duration' => 10, 'weeks' => 1]);
-check('a 10s spot costs the base rate each week', $q['weekly'] == $c['formats']['text']['base']);
+check('no zone or time-of-day settings are left', !array_intersect(['zones', 'rotation', 'frequencies', 'dayparts'], array_keys($c)));
+$ok = true;
+foreach ($c['plays'] as $plan) {
+    $q = $p->quote(['every' => $plan['every'], 'weeks' => $c['periodWeeks']]);
+    $ok = $ok && $q['lines'][0]['amount'] == $plan['price'] && $q['lines'][0]['label'] === $plan['label'];
+}
+check('each play rate costs its listed price for one ' . $c['periodWeeks'] . '-week period', $ok);
+$q = $p->quote(['every' => 2, 'weeks' => 3 * $c['periodWeeks']]);
+check('three periods cost three times the price', $q['lines'][0]['amount'] == 3 * $p->plan(2)['price']);
+check('a play rate that is not offered falls back to the default', $p->quote(['every' => 7])['input']['every'] === $c['defaultEvery']);
+check('every spot is ' . $c['duration']['min'] . ' seconds, whatever length is sent', $p->quote(['duration' => 30])['input']['duration'] === $c['duration']['min']);
+check('runs are rounded to whole periods', array_map(fn($w) => $p->quote(['weeks' => $w])['input']['weeks'], [1, 6, 26]) === [4, 8, 24]);
+$q = $p->quote(['every' => 4, 'weeks' => 4]);
+check($c['taxLabel'] . ' is added on top of the listed price', $q['subtotal'] == $p->plan(4)['price'] && $q['tax'] == Pricing::round2($q['subtotal'] * $c['taxRate']) && $q['total'] == $q['subtotal'] + $q['tax']);
 
-$plain = $p->quote(['format' => 'image', 'duration' => 15, 'weeks' => 4]);
-$tampered = $p->quote(['format' => 'image', 'duration' => 15, 'weeks' => 4, 'zones' => ['recovery'], 'frequency' => 2, 'daypart' => 'offpeak']);
+$plain = $p->quote(['format' => 'image', 'every' => 2, 'weeks' => 4]);
+$tampered = $p->quote(['format' => 'image', 'every' => 2, 'weeks' => 4, 'zones' => ['recovery'], 'frequency' => 2, 'daypart' => 'offpeak']);
 check('zone, plays-per-hour and time-of-day choices sent by old browsers are ignored', $tampered == $plain);
-
-$long = $p->quote(['format' => 'video', 'duration' => 30, 'weeks' => 12]);
-check('12-week runs get the 20% term discount', in_array('term', array_column($long['lines'], 'key'), true) && str_contains(json_encode($long['lines'], JSON_UNESCAPED_UNICODE), '−20%'));
 
 /* ---------------------------------------------------------------- studio vs server */
 
 section('Studio and server prices');
 $cases = [];
 foreach (array_keys($c['formats']) as $format) {
-    foreach ([10, 11, 15, 22, 30, 37, 45, 60] as $duration) {
-        foreach ([1, 3, 4, 8, 12, 26] as $weeks) {
-            foreach ([[], ['priority' => true], ['priority' => true, 'audio' => true, 'designAssist' => true, 'rush' => true]] as $addons) {
-                $cases[] = compact('format', 'duration', 'weeks', 'addons');
+    foreach ([null, 6, 15, 60] as $duration) {
+        foreach ([null, 1, 2, 3, 4, 6, 8, 12, 20, 24, 26] as $weeks) {
+            foreach ([null, 1, 2, 3, 4, 7, '3'] as $every) {
+                foreach ([[], ['priority' => true], ['priority' => true, 'audio' => true, 'designAssist' => true, 'rush' => true]] as $addons) {
+                    $cases[] = compact('format', 'duration', 'weeks', 'every', 'addons');
+                }
             }
         }
     }
@@ -69,7 +79,7 @@ $js = run_node(__DIR__ . '/quote.js', json_encode($cases));
 if ($js === null) {
     echo "  skip  Node.js not found, so the studio's prices weren't compared\n";
 } else {
-    $money = fn(array $q) => [$q['lines'], $q['weekly'], $q['subtotal'], $q['tax'], $q['total']];
+    $money = fn(array $q) => [$q['input'], $q['lines'], $q['subtotal'], $q['tax'], $q['total']];
     $mismatch = null;
     foreach ($cases as $i => $case) {
         if ($money($p->quote($case)) != $money($js[$i])) { $mismatch = $case; break; }

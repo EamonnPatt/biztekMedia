@@ -36,11 +36,6 @@ final class Pricing
         return floor(($n + PHP_FLOAT_EPSILON) * 100 + 0.5) / 100;
     }
 
-    private static function round3(float $n): float
-    {
-        return floor(($n + PHP_FLOAT_EPSILON) * 1000 + 0.5) / 1000;
-    }
-
     private static function clamp(float $n, float $lo, float $hi): float
     {
         return min($hi, max($lo, $n));
@@ -87,19 +82,16 @@ final class Pricing
 
     /* ------------------------------------------------ pricing */
 
-    public function durationMultiplier(mixed $seconds): float
+    // The plays option for "1 play every N minutes", falling back to the default one.
+    public function plan(mixed $every): array
     {
-        $c = $this->config['duration'];
-        $d = self::clamp(floor(self::orDefault(self::num($seconds), $c['min']) + 0.5), $c['min'], $c['max']);
-        return self::round3(pow($d / 10, $c['curve']));
-    }
-
-    public function termDiscountRate(int $weeks): float
-    {
-        foreach ($this->config['termDiscounts'] as $t) {
-            if ($weeks >= $t['minWeeks']) return (float) $t['rate'];
+        $n = self::num($every);
+        $fallback = null;
+        foreach ($this->config['plays'] as $p) {
+            if ($p['every'] == $n) return $p;
+            if ($p['every'] == $this->config['defaultEvery']) $fallback = $p;
         }
-        return 0.0;
+        return $fallback;
     }
 
     public function normalize(mixed $input): array
@@ -108,9 +100,12 @@ final class Pricing
         $i = is_array($input) ? $input : [];
 
         $format = is_string($i['format'] ?? null) && isset($c['formats'][$i['format']]) ? $i['format'] : 'text';
-        $duration = (int) self::clamp(floor(self::orDefault(self::num($i['duration'] ?? null), 15) + 0.5), $c['duration']['min'], $c['duration']['max']);
+        $duration = (int) self::clamp(floor(self::orDefault(self::num($i['duration'] ?? null), $c['duration']['min']) + 0.5), $c['duration']['min'], $c['duration']['max']);
+        $every = (int) $this->plan($i['every'] ?? null)['every'];
 
-        $weeks = (int) self::clamp(floor(self::orDefault(self::num($i['weeks'] ?? null), 1) + 0.5), $c['weeks']['min'], $c['weeks']['max']);
+        // Runs are sold in whole periods, so round to the nearest one.
+        $per = $c['periodWeeks'];
+        $weeks = (int) self::clamp(floor(self::orDefault(self::num($i['weeks'] ?? null), $per) / $per + 0.5) * $per, $c['weeks']['min'], $c['weeks']['max']);
 
         $a = isset($i['addons']) && is_array($i['addons']) ? $i['addons'] : [];
         $addons = [
@@ -120,35 +115,24 @@ final class Pricing
             'rush' => self::truthy($a['rush'] ?? null),
         ];
 
-        return ['format' => $format, 'duration' => $duration, 'weeks' => $weeks, 'addons' => $addons];
+        return ['format' => $format, 'duration' => $duration, 'every' => $every, 'weeks' => $weeks, 'addons' => $addons];
     }
 
     public function quote(mixed $input): array
     {
         $c = $this->config;
         $n = $this->normalize($input);
-        $fmt = $c['formats'][$n['format']];
-        $durationMult = $this->durationMultiplier($n['duration']);
-
-        $weekly = self::round2($fmt['base'] * $durationMult);
+        $p = $this->plan($n['every']);
+        $periods = $n['weeks'] / $c['periodWeeks'];
         $lines = [];
 
-        $airtime = self::round2($weekly * $n['weeks']);
-        $lines[] = ['key' => 'airtime', 'label' => $fmt['label'] . ' airtime', 'detail' => $n['weeks'] . ' wk × ' . self::money($weekly), 'amount' => $airtime];
+        $airtime = self::round2($p['price'] * $periods);
+        $lines[] = ['key' => 'airtime', 'label' => $p['label'], 'detail' => $n['weeks'] . ' wk · ' . self::jsNumber($periods) . ' × ' . self::money($p['price']), 'amount' => $airtime];
 
-        $discountable = $airtime;
         if ($n['addons']['priority']) {
-            $p = $c['addons']['priority'];
-            $amt = self::round2($airtime * $p['percent']);
-            $discountable = self::round2($discountable + $amt);
-            $lines[] = ['key' => 'priority', 'label' => $p['label'], 'detail' => '+' . self::jsNumber($p['percent'] * 100) . '%', 'amount' => $amt];
+            $pr = $c['addons']['priority'];
+            $lines[] = ['key' => 'priority', 'label' => $pr['label'], 'detail' => '+' . self::jsNumber($pr['percent'] * 100) . '%', 'amount' => self::round2($airtime * $pr['percent'])];
         }
-
-        $termRate = $this->termDiscountRate($n['weeks']);
-        if ($termRate > 0 && $discountable > 0) {
-            $lines[] = ['key' => 'term', 'label' => 'Term discount', 'detail' => '−' . (int) floor($termRate * 100 + 0.5) . '% for ' . $n['weeks'] . ' wk', 'amount' => -self::round2($discountable * $termRate)];
-        }
-
         if ($n['addons']['audio']) {
             $au = $c['addons']['audio'];
             $lines[] = ['key' => 'audio', 'label' => $au['label'], 'detail' => $n['weeks'] . ' wk × ' . self::money($au['perWeek']), 'amount' => self::round2($au['perWeek'] * $n['weeks'])];
@@ -174,8 +158,8 @@ final class Pricing
         return [
             'currency' => $c['currency'],
             'input' => $n,
-            'factors' => ['base' => $fmt['base'], 'durationMult' => $durationMult],
-            'weekly' => $weekly,
+            'plan' => $p,
+            'periods' => $periods,
             'lines' => $lines,
             'subtotal' => $subtotal,
             'tax' => $tax,

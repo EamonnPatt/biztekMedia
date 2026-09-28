@@ -7,7 +7,6 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const money = P.money;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const x2 = (n) => '×' + n.toFixed(2);
 
   /* ---------------------------------------------------------- nav */
   const nav = $('#nav');
@@ -26,8 +25,9 @@
   links.addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
 
   /* ---------------------------------------------------------- facts from config */
+  const whole = (n) => money(n).replace('.00', '');
   const facts = {
-    from: money(Math.min(...Object.values(C.formats).map((f) => f.base))).replace('.00', ''),
+    from: whole(Math.min(...C.plays.map((p) => p.price))),
   };
   $$('[data-fact]').forEach((el) => {
     const v = facts[el.dataset.fact];
@@ -36,63 +36,13 @@
   $('#year').textContent = new Date().getFullYear();
 
   /* ---------------------------------------------------------- rate card */
-  const range = $('#lenRange');
-  const out = $('#lenOut');
-  const chips = $$('#lenChips button');
-  const cards = $$('.fcard[data-format]');
-
-  function setLength(sec, animate) {
-    sec = Math.round(sec);
-    range.value = sec;
-    out.textContent = sec + 's';
-    range.style.setProperty('--p', ((sec - C.duration.min) / (C.duration.max - C.duration.min)) * 100 + '%');
-    chips.forEach((b) => b.classList.toggle('is-on', Number(b.dataset.len) === sec));
-
-    cards.forEach((card) => {
-      const fmt = card.dataset.format;
-      const rate = P.spotRate(fmt, sec);
-      const amt = $('[data-price]', card);
-      const next = money(rate);
-      if (amt.textContent !== next) {
-        amt.textContent = next;
-        if (animate) { amt.classList.remove('bump'); void amt.offsetWidth; amt.classList.add('bump'); }
-      }
-      const perSec = rate / sec;
-      const basePerSec = C.formats[fmt].base / 10;
-      const saving = Math.round((1 - perSec / basePerSec) * 100);
-      $('[data-persec]', card).textContent = saving > 0
-        ? `${money(perSec)} per second · ${saving}% less than a 10s spot`
-        : `${money(perSec)} per second of airtime`;
-    });
-  }
-  range.addEventListener('input', () => setLength(Number(range.value), true));
-  chips.forEach((b) => b.addEventListener('click', () => setLength(Number(b.dataset.len), true)));
-  setLength(15, false);
-
-  /* ---------------------------------------------------------- price stack */
-  const lengths = [10, 15, 20, 30, 45, 60];
-  const plates = [
-    {
-      title: 'Format', note: 'Weekly base for a 10s spot on every screen.',
-      rows: Object.values(C.formats).map((f) => [f.label, money(f.base) + '<small>/wk</small>']),
-    },
-    {
-      title: 'Length', note: 'Longer spots cost less per second.',
-      rows: lengths.map((s) => [s + ' seconds', x2(P.durationMultiplier(s))]),
-    },
-    {
-      title: 'Weeks', note: `Run ${C.weeks.min}–${C.weeks.max} weeks. Longer runs save more.`,
-      rows: [['1–3 weeks', 'full price']].concat(
-        C.termDiscounts.slice().reverse().map((t) => [`${t.minWeeks}+ weeks`, `−${Math.round(t.rate * 100)}%`])
-      ),
-    },
-  ];
-  $('#priceStack').innerHTML = plates.map((p, i) => `
+  const runs = [C.weeks.min, C.weeks.min * 3, C.weeks.max].filter((w, i, a) => a.indexOf(w) === i);
+  $('#priceStack').innerHTML = C.plays.map((p) => `
     <article class="plate reveal">
-      ${i ? '<span class="plate-op" aria-hidden="true">×</span>' : ''}
-      <h3>${p.title}</h3>
-      <p>${p.note}</p>
-      <ul>${p.rows.map(([a, b]) => `<li><b>${a}</b><span>${b}</span></li>`).join('')}</ul>
+      <h3>${esc(p.label)}</h3>
+      <p class="plate-price">${whole(p.price)}</p>
+      <p>per ${C.periodWeeks} weeks + ${esc(C.taxLabel)}</p>
+      <ul>${runs.map((w) => `<li><b>${w} weeks</b><span>${whole(P.quote({ every: p.every, weeks: w }).lines[0].amount)}</span></li>`).join('')}</ul>
     </article>`).join('');
 
   const addonPrice = (a) => a.percent ? `+${Math.round(a.percent * 100)}% airtime`
@@ -101,18 +51,20 @@
     <li><b>${esc(a.label)}</b><span>${esc(a.detail)}${a.formats ? ' · video only' : ''}</span><em>${addonPrice(a)}</em></li>`).join('');
 
   /* ---------------------------------------------------------- example receipt */
-  const example = { format: 'image', duration: 15, weeks: 4 };
+  const example = { format: 'image', every: 2, weeks: C.periodWeeks };
   const q = P.quote(example);
+  const row = (label, amt, detail = '') => `
+      <div class="r-row${amt < 0 ? ' is-neg' : ''}">
+        <span class="r-label">${esc(label)}${detail ? `<span class="r-detail">${esc(detail)}</span>` : ''}</span>
+        <span class="r-amt">${money(amt)}</span>
+      </div>`;
   $('#exampleReceipt').innerHTML = `
     <p class="receipt-title">Example order</p>
-    <p class="receipt-sub">15s image · every screen · 4 weeks</p>
+    <p class="receipt-sub">${q.input.duration}s image · every screen · ${q.input.weeks} weeks</p>
     <hr>
-    ${q.lines.map((l) => `
-      <div class="r-row${l.amount < 0 ? ' is-neg' : ''}">
-        <span class="r-label">${esc(l.label)}<span class="r-detail">${esc(l.detail)}</span></span>
-        <span class="r-amt">${money(l.amount)}</span>
-      </div>`).join('')}
+    ${q.lines.map((l) => row(l.label, l.amount, l.detail)).join('')}
     <hr>
+    ${C.taxRate > 0 ? row('Subtotal', q.subtotal) + row(`${C.taxLabel} (${Math.round(C.taxRate * 10000) / 100}%)`, q.tax) + '<hr>' : ''}
     <div class="r-row r-total"><span>Total</span><span class="r-amt">${money(q.total)}</span></div>
     <a class="btn btn-orange" href="editor.html?start=image">Build one like this →</a>`;
 
@@ -126,7 +78,7 @@
   let timer;
   function show(i) {
     slides.forEach((s, j) => s.classList.toggle('is-active', j === i));
-    const secs = Number(slides[i].dataset.len) * 0.4; // sped up for the demo
+    const secs = Number(slides[i].dataset.len);
     bar.style.transition = 'none';
     bar.style.width = '0%';
     void bar.offsetWidth;

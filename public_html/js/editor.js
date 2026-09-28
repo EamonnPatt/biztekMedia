@@ -78,12 +78,13 @@
   /* ============================================================ state */
   const defaultDoc = () => ({
     orientation: 'landscape',
-    duration: 15,
+    duration: PC.duration.max,
     background: { type: 'solid', color1: '#17130F', color2: '#D2380A', angle: 135 },
     layers: [],
   });
   const defaultCampaign = () => ({
-    weeks: 4,
+    every: PC.defaultEvery,
+    weeks: PC.periodWeeks,
     startDate: isoDate(addDays(new Date(), 3)),
     addons: { priority: false, audio: false, designAssist: false, rush: false },
   });
@@ -106,7 +107,7 @@
   const dom = {
     stage: $('#stage'), overlay: $('#overlay'), holder: $('#stageHolder'), wrap: $('#stageWrap'), meta: $('#stageMeta'),
     ruler: $('#tlRuler'), tracks: $('#tlTracks'), tlBody: $('#tlBody'), playhead: $('#tlPlayhead'), time: $('#tlTime'),
-    durRange: $('#durRange'), durOut: $('#durOut'), playBtn: $('#playBtn'),
+    durOut: $('#durOut'), playBtn: $('#playBtn'),
     props: $('#propsPane'), campaign: $('#campaignPane'), library: $('#library'), templates: $('#templates'),
     fileInput: $('#fileInput'), replaceInput: $('#replaceInput'), dropzone: $('#dropzone'),
     pcAmt: $('#pcAmt'), pcRate: $('#pcRate'), rfTotal: $('#rfTotal'), rfSummary: $('#rfSummary'),
@@ -1006,14 +1007,22 @@
       const d = defaultDoc();
       doc = {
         orientation: SIZES[saved.doc.orientation] ? saved.doc.orientation : d.orientation,
-        duration: clamp(Math.round(Number(saved.doc.duration) || 15), PC.duration.min, PC.duration.max),
+        duration: clamp(Math.round(Number(saved.doc.duration) || d.duration), PC.duration.min, PC.duration.max),
         background: { ...d.background, ...(saved.doc.background || {}) },
         layers: saved.doc.layers.filter((l) => l && typeof l.id === 'string' && LAYER_TYPES.includes(l.type)),
       };
+      // An ad saved when spots could be longer: keep every layer inside the spot.
+      for (const l of doc.layers) {
+        l.end = round(clamp(Number(l.end) || doc.duration, MIN_LEN, doc.duration), 2);
+        l.start = round(clamp(Number(l.start) || 0, 0, l.end - MIN_LEN), 2);
+      }
     }
     if (saved && saved.campaign) {
       const c = defaultCampaign();
       campaign = { ...c, ...saved.campaign, addons: { ...c.addons, ...(saved.campaign.addons || {}) } };
+      const n = P.normalize(campaign);
+      campaign.every = n.every;
+      campaign.weeks = n.weeks;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(campaign.startDate) || campaign.startDate < isoDate(new Date())) campaign.startDate = c.startDate;
     }
   }
@@ -1122,7 +1131,7 @@
   function suggestLength(m) {
     if (!m.duration) return;
     if (m.duration > PC.duration.max + 0.5) {
-      toast(`This clip is ${Math.round(m.duration)}s long. Spots max out at ${PC.duration.max}s, so pick where it starts under Video.`);
+      toast(`This clip is ${Math.round(m.duration)}s long. Spots are ${PC.duration.max}s, so pick where it starts under Video.`);
       return;
     }
     const len = clamp(Math.round(m.duration), PC.duration.min, PC.duration.max);
@@ -1323,12 +1332,6 @@
     return kinds.includes('video') ? 'video' : kinds.includes('image') ? 'image' : 'text';
   }
 
-  function tierExplain(fmt) {
-    if (fmt === 'video') return 'Your ad has a video layer, so it\'s billed at the video rate.';
-    if (fmt === 'image') return 'Your ad has an image, so it\'s billed at the image rate. Adding a video moves it to the video rate.';
-    return 'Text, shapes and QR codes only, so you pay the lowest rate. Adding an image or video changes the rate.';
-  }
-
   function buildProps() {
     const l = selected();
     dom.props.innerHTML = l ? layerPropsHtml(l) : canvasPropsHtml();
@@ -1337,11 +1340,9 @@
 
   function canvasPropsHtml() {
     const bg = doc.background;
-    const fmt = detectFormat();
     return `
       <div class="layer-head"><span class="tl-icon" style="--c:var(--ink);--fg:var(--cream)">▭</span><b style="font-size:15px;font-weight:800">Screen</b></div>
-      ${H.section('Ad type', `<div class="tier-card"><b>${PC.formats[fmt].label} rate</b><p>${tierExplain(fmt)}</p></div>`)}
-      ${H.section('Spot length', `${H.range('D.duration', 'Seconds each time it plays', PC.duration.min, PC.duration.max, 1, { fmt: 's' })}<p class="hint">Longer spots cost more, but less per second.</p>`)}
+      ${H.section('Spot', `<div class="tier-card"><b>${PC.duration.max}-second spot</b><p>Every ad is ${PC.duration.max} seconds long, whether it's video, image or text. The price depends only on how often it plays, which you pick under Schedule &amp; price.</p></div>`)}
       ${H.section('Screen', H.seg('D.orientation', [['landscape', 'Landscape 16:9'], ['portrait', 'Portrait 9:16']]))}
       ${H.section('Background', `<div class="pgrid">
         ${H.seg('D.background.type', [['solid', 'Solid'], ['gradient', 'Gradient'], ['stripes', 'Stripes']])}
@@ -1418,7 +1419,7 @@
       video = `<div class="pgrid" style="margin-top:12px">
         ${H.range('L.trimStart', 'Start the clip at', 0, Math.max(0, round(vd - 0.5, 1)), 0.1, { fmt: 's' })}
         ${H.toggle('L.loop', 'Loop if the clip is shorter than its time on screen')}
-        <div class="btn-row">${H.btn('match-video', `Make spot ${matchLen}s to match clip`)}</div>
+        ${PC.duration.min < PC.duration.max ? `<div class="btn-row">${H.btn('match-video', `Make spot ${matchLen}s to match clip`)}</div>` : ''}
       </div>
       ${!l.loop && playable < l.end - l.start - 0.05 ? '<p class="hint warn">The clip ends before this layer does, so it will hold on the last frame.</p>' : ''}
       ${vd > PC.duration.max ? `<p class="hint">Only ${PC.duration.max}s can play. Use “Start the clip at” to choose which part.</p>` : ''}`;
@@ -1629,13 +1630,14 @@
     const today = isoDate(new Date());
     dom.campaign.innerHTML = `
       ${H.section('Your booking', '<div class="tier-card booking-sum" id="bookingSummary"></div>')}
-      ${H.section('Spot length', H.range('D.duration', 'Seconds each time it plays', PC.duration.min, PC.duration.max, 1, { fmt: 's' }))}
+      ${H.section('How often it plays', `<div class="plays-grid" data-seg="C.every" data-kind="num" role="group" aria-label="How often it plays">${PC.plays.map((p) =>
+        `<button type="button" data-value="${p.every}"><b>${esc(p.label)}</b><span>${money(p.price)} / ${PC.periodWeeks} wk</span></button>`).join('')}</div>
+        <p class="hint">Each play is a ${PC.duration.max}-second spot on every screen. Prices are for ${PC.periodWeeks} weeks, plus ${esc(PC.taxLabel)}.</p>`)}
       ${H.section('Schedule', `<div class="pgrid">
           <label class="f full"><span>Start date</span><input type="date" data-bind="C.startDate" min="${today}"></label>
-          <label class="f full"><span>Run length</span><input type="range" class="rng" data-bind="C.weeks" min="${PC.weeks.min}" max="${PC.weeks.max}" step="1"></label>
+          <label class="f full"><span>Run length</span><input type="range" class="rng" data-bind="C.weeks" min="${PC.weeks.min}" max="${PC.weeks.max}" step="${PC.periodWeeks}"></label>
         </div>
-        <div class="weeks-line"><span><b id="weeksOut"></b> <span id="weeksWord">weeks</span></span><span id="endDate"></span></div>
-        <div class="term-chips" id="termChips">${PC.termDiscounts.slice().reverse().map((td) => `<span data-min="${td.minWeeks}">${td.minWeeks}+ wk −${Math.round(td.rate * 100)}%</span>`).join('')}</div>`)}
+        <div class="weeks-line"><span><b id="weeksOut"></b> <span id="weeksWord">weeks</span></span><span id="endDate"></span></div>`)}
       ${H.section('Add-ons', `<div class="choice-grid">${Object.entries(PC.addons).map(([k, a]) =>
         H.toggle(`C.addons.${k}`, esc(a.label), { sub: esc(a.detail) + (a.formats ? ' · video only' : ''), price: addonPrice(a), id: `addon-${k}` })).join('')}</div>`)}
       <div class="quote-wrap"><div class="receipt-shadow"><div class="receipt" id="quoteReceipt"></div></div></div>`;
@@ -1650,9 +1652,6 @@
       wo.textContent = weeks;
       $('#weeksWord').textContent = weeks === 1 ? 'week' : 'weeks';
       if (campaign.startDate) $('#endDate').textContent = `${fmtDate(campaign.startDate)} → ${fmtDate(runEnd())}`;
-      const rate = P.termDiscountRate(weeks);
-      const active = PC.termDiscounts.find((td) => td.rate === rate);
-      $$('#termChips span').forEach((s) => s.classList.toggle('is-on', !!active && Number(s.dataset.min) === active.minWeeks));
     }
     const audio = $('#addon-audio');
     if (audio) {
@@ -1676,6 +1675,7 @@
       <b>${fmt} ad on every screen</b>
       <dl>
         <dt>Your ad</dt><dd>${fmt}, ${q.input.duration} seconds each time it plays</dd>
+        <dt>How often</dt><dd>${esc(q.plan.label)}</dd>
         <dt>Where</dt><dd>Every screen in the gym</dd>
         <dt>Runs</dt><dd>${campaign.startDate ? `${fmtDate(campaign.startDate)} → ${fmtDate(runEnd())} (${weeks})` : `${weeks}, once you pick a start date`}</dd>
         <dt>Extras</dt><dd>${extras.join(', ') || 'None'}</dd>
@@ -1685,7 +1685,6 @@
   }
 
   function receiptHtml(q, title = 'Your quote') {
-    const f = q.factors;
     const fmt = PC.formats[q.input.format].label;
     const lines = q.lines.map((l) => `
       <div class="r-row${l.amount < 0 ? ' is-neg' : ''}">
@@ -1699,12 +1698,6 @@
     return `
       <p class="receipt-title">${esc(title)}</p>
       <p class="receipt-sub">${fmt} · ${q.input.duration}s · every screen</p>
-      <hr>
-      <ul class="factor-list">
-        <li><span>${fmt} base, 10s</span><span>${money(f.base)}</span></li>
-        <li><span>× length ${q.input.duration}s</span><span>${f.durationMult.toFixed(3)}</span></li>
-      </ul>
-      <div class="r-row" style="margin-top:6px"><span class="r-label">Weekly rate</span><span class="r-amt">${money(q.weekly)}</span></div>
       <hr>
       ${lines}
       <hr>
@@ -1733,17 +1726,13 @@
     const q = currentQuote();
     tweenTotal(q.total);
     const fmt = PC.formats[q.input.format].label;
-    dom.pcRate.textContent = `${fmt.toUpperCase()} RATE`;
-    dom.rfSummary.textContent = `${fmt} · ${q.input.duration}s · every screen · ${q.input.weeks} wk`;
+    const often = q.input.every === 1 ? 'every min' : `every ${q.input.every} min`;
+    dom.pcRate.textContent = `${often.toUpperCase()} · INCL. ${PC.taxLabel}`;
+    dom.rfSummary.textContent = `${fmt} · ${q.input.duration}s · ${often} · ${q.input.weeks} wk`;
     const receipt = $('#quoteReceipt');
     if (receipt) receipt.innerHTML = receiptHtml(q);
     const summary = $('#bookingSummary');
     if (summary) summary.innerHTML = bookingSummaryHtml(q);
-    const tier = $('.tier-card', dom.props);
-    if (tier) {
-      tier.querySelector('b').textContent = `${fmt} rate`;
-      tier.querySelector('p').textContent = tierExplain(q.input.format);
-    }
     syncCampaign();
   }
 
@@ -2013,8 +2002,6 @@
   }
 
   function syncDurationUI() {
-    dom.durRange.value = doc.duration;
-    setRangeFill(dom.durRange);
     dom.durOut.textContent = doc.duration + 's';
   }
   function syncOrientationUI() {
@@ -2140,8 +2127,6 @@
   });
 
   dom.playBtn.addEventListener('click', togglePlay);
-  dom.durRange.addEventListener('input', () => setDuration(Number(dom.durRange.value)));
-  dom.durRange.addEventListener('change', commit);
   $('#loopBtn').addEventListener('click', (e) => {
     loopPreview = !loopPreview;
     e.currentTarget.setAttribute('aria-pressed', String(loopPreview));

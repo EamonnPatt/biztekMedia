@@ -193,7 +193,7 @@ function api_checkout(): never
     }
     $uploads = array_values($uploads);
 
-    // The rate comes from what was really uploaded, not from what the browser says.
+    // The ad type comes from what was really uploaded, not from what the browser says.
     $kinds = array_column($uploads, 'kind');
     $format = in_array('video', $kinds, true) ? 'video' : (in_array('image', $kinds, true) ? 'image' : 'text');
 
@@ -213,7 +213,7 @@ function api_checkout(): never
         'contact' => $contact,
         'campaign' => $q['input'] + ['startDate' => $startDate],
         'quote' => [
-            'currency' => $q['currency'], 'weekly' => $q['weekly'], 'lines' => $q['lines'], 'subtotal' => $q['subtotal'],
+            'currency' => $q['currency'], 'plan' => $q['plan'], 'periods' => $q['periods'], 'lines' => $q['lines'], 'subtotal' => $q['subtotal'],
             'tax' => $q['tax'], 'total' => $q['total'],
         ],
         'composition' => $composition,
@@ -443,7 +443,7 @@ function notify_new_order(array $order): void
         . ($c['website'] ? "Website: {$c['website']}\n" : '')
         . ($c['notes'] ? "Notes: {$c['notes']}\n" : '')
         . "\nStarts {$k['startDate']} for {$k['weeks']} week(s)\n"
-        . "Every screen\n"
+        . "Every screen, " . bz_pricing()->plan($k['every'])['label'] . "\n"
         . "Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']}s\nFiles:\n$files\n\n"
         . "Review it: " . bz_site_url() . "/admin.php\n";
 
@@ -502,6 +502,7 @@ function order_receipt_text(array $order): string
         . "Your campaign\n"
         . "  Starts: $startOn, for $weeks\n"
         . "  Where: every screen in the gym\n"
+        . "  How often: " . bz_pricing()->plan($k['every'])['label'] . "\n"
         . "  Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']} seconds, {$order['composition']['orientation']}\n\n"
         . "Price\n$prices\n"
         . "$payment\n"
