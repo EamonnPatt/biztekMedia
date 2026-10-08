@@ -4,11 +4,12 @@ declare(strict_types=1);
 /*
  * Hands a paid order's ad over to the ad player: the site that runs on the gym's TVs.
  *
- * The player keeps its ads, and the image or video each one plays, in the same MySQL database as this site, in
- * tables named <prefix>tv_ads, <prefix>tv_media and <prefix>tv_media_chunks (the player creates them the first
- * time it is opened). This copies the order's file into them and adds the ad, PAUSED, with the advertiser's start
- * and end dates. Nothing reaches a TV until someone switches the ad on in the player's admin panel, which is the
- * review the advertiser was promised.
+ * The player keeps its ads, and the image or video each one plays, in a MySQL database (this site's, or its own),
+ * in tables named <prefix>tv_ads, <prefix>tv_media and <prefix>tv_media_chunks (the player creates them the first
+ * time it is opened). This copies the order's file into them and adds the ad with the advertiser's start and end
+ * dates, NOT APPROVED. The player's TVs skip an ad that isn't approved, and nothing in the player's own admin panel
+ * can approve it: only bz_player_approve() below can, from the Approve button on this site's orders page. That is
+ * the review the advertiser was promised. Approving also emails the buyer to confirm.
  *
  * The player plays one image, one video or one text slide per ad, so only the order's main video or image is
  * copied (a text-only order becomes a text slide). Any other layers are listed in the ad's private notes.
@@ -88,6 +89,20 @@ function bz_player_pick_media(array $order): ?array
     return null;
 }
 
+// The first and last day an order's ad runs (Y-m-d, null if the start date is bad) and how many weeks it was booked
+// for. $campaign is the order's 'campaign'.
+function bz_player_dates(array $campaign): array
+{
+    $start = (string) ($campaign['startDate'] ?? '');
+    $ok = preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) === 1 && checkdate((int) substr($start, 5, 2), (int) substr($start, 8, 2), (int) substr($start, 0, 4));
+    $weeks = max(1, (int) ($campaign['weeks'] ?? 1));
+    return [
+        'start' => $ok ? $start : null,
+        'end' => $ok ? (new DateTimeImmutable($start, new DateTimeZone('UTC')))->modify('+' . ($weeks * 7 - 1) . ' days')->format('Y-m-d') : null,
+        'weeks' => $weeks,
+    ];
+}
+
 // The player's columns for an order's ad. Pure: no database or files, so the tests can run it. $media is
 // bz_player_pick_media()'s result, or null for a text-only order.
 function bz_player_ad_fields(array $order, ?array $media): array
@@ -97,10 +112,9 @@ function bz_player_ad_fields(array $order, ?array $media): array
     $comp = $order['composition'] ?? [];
     $layers = is_array($comp['layers'] ?? null) ? $comp['layers'] : [];
 
-    $start = (string) ($k['startDate'] ?? '');
-    $startOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) === 1 && checkdate((int) substr($start, 5, 2), (int) substr($start, 8, 2), (int) substr($start, 0, 4));
-    $weeks = max(1, (int) ($k['weeks'] ?? 1));
-    $end = $startOk ? (new DateTimeImmutable($start, new DateTimeZone('UTC')))->modify('+' . ($weeks * 7 - 1) . ' days')->format('Y-m-d') : null;
+    ['start' => $startDate, 'end' => $end, 'weeks' => $weeks] = bz_player_dates($k);
+    $startOk = $startDate !== null;
+    $start = (string) $startDate;
 
     $business = bz_cut($c['business'] ?? '', 120);
     $fields = [
@@ -115,6 +129,8 @@ function bz_player_ad_fields(array $order, ?array $media): array
             : (($comp['orientation'] ?? '') === 'portrait' ? 'contain' : 'cover'), // a tall ad keeps all of itself on a wide screen
         'background' => bz_player_hex($comp['background']['color1'] ?? null, '#000000'),
         'enabled' => 0,
+        'approved' => 0, // the TVs skip the ad until the Approve button on the orders page sets this
+        'order_id' => $order['id'],
         'start_date' => $startOk ? $start : null,
         'end_date' => $end,
         'plays_per_loop' => 1,
@@ -156,7 +172,7 @@ function bz_player_ad_fields(array $order, ?array $media): array
         . "Advertiser: $business" . ($who !== '' ? " · $who" : '') . "\n"
         . 'Booked: ' . ($plan !== '' ? "$plan, " : '') . "$weeks week" . ($weeks === 1 ? '' : 's') . ($startOk ? " from $start" : '') . "\n"
         . ($others > 0 ? "The design has $others more layer" . ($others === 1 ? '' : 's') . " (text, shapes) than the player can show. See the order's layout on the Biztek orders page.\n" : '')
-        . "Added paused. Check it, set Plays per loop to match the booking, then switch it on.",
+        . "Waiting for approval: it can't play until you press Approve on the Biztek Media orders page, which also emails the buyer. Then set Plays per loop to match the booking.",
         1000
     );
     return $fields;
@@ -196,35 +212,55 @@ function bz_player_delete_media(PDO $db, string $mediaId): void
     $db->prepare('DELETE FROM ' . bz_player_table('media') . ' WHERE id = ?')->execute([$mediaId]);
 }
 
-// Which of the given player ads exist, and whether each is switched on: id => enabled. Empty if the player's
-// tables aren't there.
+// Which of the given player ads exist, and their state: id => ['enabled' => bool, 'approved' => bool|null]. approved
+// is null when the player is an older version that can't hold ads for approval yet. Empty if the player's tables
+// aren't there.
 function bz_player_ad_states(array $adIds): array
 {
     $adIds = array_values(array_filter(array_unique($adIds), 'is_string'));
     if (!$adIds) return [];
+    $in = implode(', ', array_fill(0, count($adIds), '?'));
+    $db = null;
     try {
-        $st = bz_player_db()->prepare('SELECT id, enabled FROM ' . bz_player_table('ads') . ' WHERE id IN (' . implode(', ', array_fill(0, count($adIds), '?')) . ')');
-        $st->execute($adIds);
-        return array_map('boolval', $st->fetchAll(PDO::FETCH_KEY_PAIR));
+        $db = bz_player_db();
+        try {
+            $st = $db->prepare('SELECT id, enabled, approved FROM ' . bz_player_table('ads') . " WHERE id IN ($in)");
+            $st->execute($adIds);
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S22') throw $e; // unknown column: a player from before approvals
+            $st = $db->prepare('SELECT id, enabled, NULL AS approved FROM ' . bz_player_table('ads') . " WHERE id IN ($in)");
+            $st->execute($adIds);
+        }
+        $states = [];
+        foreach ($st->fetchAll() as $r) {
+            $states[(string) $r['id']] = ['enabled' => (bool) $r['enabled'], 'approved' => $r['approved'] === null ? null : (bool) $r['approved']];
+        }
+        return $states;
     } catch (PDOException | HttpError) {
         return [];
     }
 }
 
-// Sends a paid order's ad to the player, paused, and notes it on the order. Returns what was recorded.
-function bz_player_publish(string $orderId): array
+// Runs $work with a lock on one order, so a double click, a retry mid-copy or an approval during a send can't
+// happen twice at once.
+function bz_player_locked(string $orderId, callable $work): mixed
 {
     $db = bz_db();
-    // One send at a time per order, so a double click or a retry mid-copy can't add the ad twice.
     $lockName = 'bz_player_' . $orderId;
     $lock = $db->prepare('SELECT GET_LOCK(?, 0)');
     $lock->execute([$lockName]);
-    if ((int) $lock->fetchColumn() !== 1) throw new HttpError(409, 'This order is already being sent to the player.');
+    if ((int) $lock->fetchColumn() !== 1) throw new HttpError(409, 'This order is being worked on right now. Try again in a minute.');
     try {
-        return bz_player_publish_locked(bz_player_db(), $orderId);
+        return $work();
     } finally {
         $db->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
     }
+}
+
+// Sends a paid order's ad to the player, NOT approved, and notes it on the order. Returns what was recorded.
+function bz_player_publish(string $orderId): array
+{
+    return bz_player_locked($orderId, fn() => bz_player_publish_locked(bz_player_db(), $orderId));
 }
 
 function bz_player_publish_locked(PDO $db, string $orderId): array
@@ -268,6 +304,10 @@ function bz_player_publish_locked(PDO $db, string $orderId): array
     } catch (PDOException $e) {
         if ($db->inTransaction()) $db->rollBack();
         if ($mediaId) bz_player_delete_media($db, $mediaId);
+        if ($e->getCode() === '42S22') {
+            // Fail closed: an ad is never added to a player that can't hold it back until it's approved.
+            throw new HttpError(500, "The ad player is an older version that can't hold ads for approval. Deploy its latest version and open it once, then send the order again.");
+        }
         if ($e->getCode() === '42S02') {
             throw new HttpError(500, "The ad player's tables aren't where this site looked: " . str_replace('`', '', bz_player_table('ads')) . ' in '
                 . (bz_player_settings() ? 'the database in player_db' : "this site's database") . ". Set player_db in config.php to the database and table_prefix from the player's adscreen-private/config.php, then send the order again.");
@@ -279,12 +319,15 @@ function bz_player_publish_locked(PDO $db, string $orderId): array
         throw $e;
     }
 
-    $result = ['adId' => $adId, 'mediaId' => $mediaId, 'type' => $fields['type'], 'at' => gmdate('c')];
+    // A fresh ad: clear anything left over from an earlier send of this order (an error, an approval of a removed ad).
+    $result = ['adId' => $adId, 'mediaId' => $mediaId, 'type' => $fields['type'], 'at' => gmdate('c'),
+        'error' => null, 'approvedAt' => null, 'emailedAt' => null, 'emailError' => null];
     bz_player_record($orderId, $result);
     return $result;
 }
 
-// Remembers on the order what happened (the ad's id, or why it couldn't be sent). Only touches the 'player' key.
+// Remembers on the order what happened with its ad (its id, why it couldn't be sent, when it was approved and the
+// buyer emailed). Adds to what is already there; only touches the 'player' key.
 function bz_player_record(string $orderId, array $player): void
 {
     $table = bz_table('orders');
@@ -292,7 +335,7 @@ function bz_player_record(string $orderId, array $player): void
     $st->execute([$orderId]);
     $data = json_decode((string) $st->fetchColumn(), true);
     if (!is_array($data)) return;
-    $data['player'] = $player;
+    $data['player'] = array_merge(is_array($data['player'] ?? null) ? $data['player'] : [], $player);
     bz_db()->prepare("UPDATE `$table` SET data = ? WHERE id = ?")
         ->execute([json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $orderId]);
 }
@@ -318,4 +361,93 @@ function bz_player_publish_later(string $orderId): void
             }
         }
     });
+}
+
+/* ---------------------------------------------------------------- approval */
+
+// Approves an order's ad: the TVs may now play it, from its start date. It is also switched on, since approving
+// is the decision to run it. Then the buyer is emailed. Returns ['emailed' => bool, 'error' => string].
+function bz_player_approve(string $orderId): array
+{
+    return bz_player_locked($orderId, function () use ($orderId): array {
+        $order = bz_load_order($orderId);
+        $adId = (string) ($order['player']['adId'] ?? '');
+        if ($adId === '') throw new HttpError(400, 'This order has not been sent to the player yet.');
+        $state = bz_player_ad_states([$adId])[$adId] ?? null;
+        if (!$state) throw new HttpError(404, 'The ad is no longer on the player. Send the order to the player again first.');
+        if ($state['approved'] === null) throw new HttpError(500, "The ad player is an older version that can't hold ads for approval. Deploy its latest version and open it once.");
+        if ($state['approved']) throw new HttpError(409, 'This ad is already approved.');
+
+        $db = bz_player_db();
+        $db->prepare('UPDATE ' . bz_player_table('ads') . ' SET approved = 1, enabled = 1 WHERE id = ? AND approved = 0')->execute([$adId]);
+        // The player's admin panel and TVs notice the ad list changed.
+        $db->prepare('REPLACE INTO ' . bz_player_table('settings') . " (name, value) VALUES ('updatedAt', ?)")->execute([(string) (int) round(microtime(true) * 1000)]);
+        bz_player_record($orderId, ['approvedAt' => gmdate('c'), 'emailedAt' => null, 'emailError' => null]);
+        return bz_player_notify_buyer($order);
+    });
+}
+
+// Sends the approval email again when the first one didn't go (see the order's emailError).
+function bz_player_resend_approval(string $orderId): array
+{
+    return bz_player_locked($orderId, function () use ($orderId): array {
+        $order = bz_load_order($orderId);
+        if (empty($order['player']['approvedAt'])) throw new HttpError(400, 'This order has not been approved on this page.');
+        if (!empty($order['player']['emailedAt'])) throw new HttpError(409, 'The buyer was already emailed.');
+        return bz_player_notify_buyer($order);
+    });
+}
+
+// Emails the buyer that their ad is approved, and notes on the order whether it went. A mail failure never undoes the
+// approval: the orders page shows it, with a button to try again.
+function bz_player_notify_buyer(array $order): array
+{
+    $to = trim((string) ($order['contact']['email'] ?? ''));
+    $sent = false;
+    $error = '';
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        $error = "The buyer's email address isn't valid.";
+    } else {
+        $test = !empty($order['demo']) || ($order['status'] ?? '') === 'paid-demo';
+        $subject = ($test ? '[TEST] ' : '') . "Your Biztek Media ad is approved ({$order['id']})";
+        $sent = bz_mail($to, $subject, bz_player_approval_text($order));
+        if (!$sent) $error = "The server couldn't send the email. Check from_email in config.php and the mail setup in cPanel.";
+    }
+    bz_player_record($order['id'], $sent
+        ? ['emailedAt' => gmdate('c'), 'emailError' => null]
+        : ['emailedAt' => null, 'emailError' => $error]);
+    if (!$sent) error_log("[biztek] could not send the approval email for {$order['id']}: $error");
+    return ['emailed' => $sent, 'error' => $error];
+}
+
+// The approval email's text. Pure, so the tests can read it.
+function bz_player_approval_text(array $order): string
+{
+    $c = $order['contact'] ?? [];
+    $k = $order['campaign'] ?? [];
+    $dates = bz_player_dates($k);
+    $day = fn(?string $d) => $d ? DateTimeImmutable::createFromFormat('!Y-m-d', $d)->format('l, F j, Y') : '';
+    $today = (new DateTimeImmutable('now', new DateTimeZone(bz_config()['timezone'] ?: 'UTC')))->format('Y-m-d');
+    $plan = '';
+    try {
+        $plan = (string) (bz_pricing()->plan($k['every'] ?? null)['label'] ?? '');
+    } catch (Throwable) {
+        // The label is only a detail.
+    }
+
+    $when = !$dates['start'] ? 'It goes on screen shortly.'
+        : ($dates['start'] > $today ? 'It goes on screen on ' . $day($dates['start']) . ' and runs through ' . $day($dates['end']) . '.'
+            : 'It is on screen now and runs through ' . $day($dates['end']) . '.');
+    $test = !empty($order['demo']) || ($order['status'] ?? '') === 'paid-demo';
+
+    return "Hi " . ($c['name'] ?? '') . ",\n\n"
+        . "Good news: we've reviewed your ad for " . ($c['business'] ?? 'your business') . " and it's approved.\n\n"
+        . "Order: {$order['id']}\n"
+        . "$when\n"
+        . "Where: every screen in the gym\n"
+        . ($plan !== '' ? "How often: $plan\n" : '')
+        . "\nYou don't need to do anything. It goes on screen by itself.\n\n"
+        . ($test ? "(This was a test order. The site is in demo mode, so no card was charged.)\n\n" : '')
+        . "Questions? Reply to this email and include your order number.\n\n"
+        . "Biztek Media\n" . bz_site_url() . "\n";
 }

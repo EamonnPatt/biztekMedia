@@ -529,21 +529,3 @@ function order_receipt_text(array $order): string
         . "Questions? Reply to this email and include your order number.\n\n"
         . "Biztek Media\n" . bz_site_url() . "\n";
 }
-
-// Sends a plain-text email from from_email (or no-reply@ this site when it isn't set).
-function bz_mail(string $to, string $subject, string $body, ?string $replyTo = null): bool
-{
-    $from = trim((string) bz_config()['from_email']);
-    $valid = filter_var($from, FILTER_VALIDATE_EMAIL) !== false;
-    if (!$valid) $from = 'no-reply@' . preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
-
-    $headers = "From: Biztek Media <$from>\r\n" . ($replyTo ? "Reply-To: $replyTo\r\n" : '') . 'Content-Type: text/plain; charset=UTF-8';
-    // For testing on a computer that can't send email: write it to a file instead.
-    $log = trim((string) bz_config()['mail_log']);
-    if ($log !== '') {
-        $entry = str_repeat('=', 72) . "\nDate: " . date('r') . "\nTo: $to\nSubject: $subject\n$headers\n\n$body\n\n";
-        return file_put_contents($log, $entry, FILE_APPEND | LOCK_EX) !== false;
-    }
-    // -f sets the bounce address to from_email too, which helps the mail pass spam checks.
-    return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, $valid ? '-f' . $from : '');
-}

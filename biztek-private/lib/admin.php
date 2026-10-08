@@ -66,9 +66,19 @@ function admin_route(): void
     }
     session_write_close(); // don't hold the session lock during long downloads
 
-    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send-to-player'])) {
-        admin_send_to_player((string) $_POST['send-to-player']);
-        return;
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        if (isset($_POST['send-to-player'])) {
+            admin_send_to_player((string) $_POST['send-to-player']);
+            return;
+        }
+        if (isset($_POST['approve-ad'])) {
+            admin_approve((string) $_POST['approve-ad'], false);
+            return;
+        }
+        if (isset($_POST['resend-approval'])) {
+            admin_approve((string) $_POST['resend-approval'], true);
+            return;
+        }
     }
     if (isset($_GET['download'])) {
         admin_download((string) $_GET['download']);
@@ -111,14 +121,33 @@ function admin_helcim_check(): void
     admin_shell('Helcim check', '<h1>Helcim check</h1>' . $result . $back);
 }
 
-// Copies an order's ad to the ad player, paused, and says what happened.
+// Approves an order's ad on the player and emails the buyer (or, with $resendOnly, just sends that email again).
+function admin_approve(string $orderId, bool $resendOnly): void
+{
+    $back = '<p><a class="btn btn-orange" href="admin.php">Back to orders</a></p>';
+    try {
+        $r = $resendOnly ? bz_player_resend_approval($orderId) : bz_player_approve($orderId);
+        $mail = $r['emailed']
+            ? 'The buyer has been emailed to confirm.'
+            : '<b>The buyer was NOT emailed:</b> ' . bz_h($r['error']) . ' Tell them yourself, or fix the problem and press <b>Send confirmation email</b> on the order.';
+        $result = '<p class="notice">' . ($resendOnly ? '' : '<b>Approved.</b> The ad is switched on and will play on the TVs from its start date. ') . $mail . '</p>';
+    } catch (HttpError $e) {
+        $result = '<p class="notice"><b>Not done.</b> ' . bz_h($e->getMessage()) . '</p>';
+    } catch (Throwable $e) {
+        error_log('[biztek] ' . $e);
+        $result = '<p class="notice"><b>Not done.</b> Something went wrong. Check the PHP error log for details.</p>';
+    }
+    admin_shell('Approve ad', '<h1>Approve ad</h1>' . $result . $back);
+}
+
+// Copies an order's ad to the ad player, waiting for approval, and says what happened.
 function admin_send_to_player(string $orderId): void
 {
     $back = '<p><a class="btn btn-orange" href="admin.php">Back to orders</a></p>';
     @set_time_limit(0);
     try {
         $r = bz_player_publish($orderId);
-        $result = '<p class="notice"><b>Sent.</b> The ad is on the player, <b>paused</b>. Open the player\'s admin panel, check it, set how often it plays, and switch it on. It will run from the order\'s start date.</p>';
+        $result = '<p class="notice"><b>Sent.</b> The ad is on the player, <b>waiting for approval</b>. It can\'t play until you press <b>Approve</b> on the order, which also emails the buyer.</p>';
     } catch (HttpError $e) {
         $result = '<p class="notice"><b>Not sent.</b> ' . bz_h($e->getMessage()) . '</p>';
     } catch (Throwable $e) {
@@ -186,7 +215,7 @@ function admin_orders_page(bool $showAll): void
     $when = fn(?string $utc) => $utc ? (new DateTime($utc, new DateTimeZone('UTC')))->setTimezone($tz)->format('M j, Y g:i a') : '';
     $size = fn(int $b) => $b > 1048576 ? number_format($b / 1048576, 1) . ' MB' : max(1, (int) round($b / 1024)) . ' KB';
 
-    // Where each order's ad is on the player: id => switched on?
+    // Where each order's ad is on the player: id => ['enabled' => bool, 'approved' => bool|null].
     $onPlayer = bz_player_ad_states(array_map(fn($r) => (json_decode($r['data'], true)['player']['adId'] ?? null), $rows));
 
     $cards = '';
@@ -208,8 +237,25 @@ function admin_orders_page(bool $showAll): void
 
         $adId = (string) ($o['player']['adId'] ?? '');
         $sendable = in_array($row['status'], ['paid', 'paid-demo'], true) && ($adId === '' || !isset($onPlayer[$adId]));
+        $button = fn(string $name, string $label, string $confirm = '') => '<form method="post" class="player-send"' . ($confirm !== '' ? ' onsubmit="return confirm(\'' . $confirm . '\')"' : '') . '><button class="btn btn-orange" type="submit" name="' . $name . '" value="' . bz_h($row['id']) . '">' . $label . '</button></form>';
+        $approveButton = '';
         if ($adId !== '' && isset($onPlayer[$adId])) {
-            $playerState = $onPlayer[$adId] ? '<b>On the player, live.</b>' : '<b>On the player, paused.</b> Switch it on in the player\'s admin panel.';
+            $ad = $onPlayer[$adId];
+            $pl = $o['player'];
+            if ($ad['approved'] === null) {
+                $playerState = '<b>On the player, but the player is an older version</b> that can\'t hold ads for approval. Deploy its latest version and open it once.';
+            } elseif ($ad['approved'] === false) {
+                $playerState = '<b>Waiting for your approval.</b> It can\'t play on the TVs until you approve it.';
+                $approveButton = $button('approve-ad', 'Approve and email the buyer', 'Approve this ad? It will go on the TVs from its start date and the buyer will be emailed.');
+            } else {
+                $playerState = ($ad['enabled'] ? '<b>Approved, on the player.</b> It plays from its start date.' : '<b>Approved, but switched off</b> in the player\'s admin panel.');
+                if (!empty($pl['emailedAt'])) {
+                    $playerState .= ' Buyer emailed ' . bz_h($when($pl['emailedAt'])) . '.';
+                } elseif (!empty($pl['approvedAt'])) {
+                    $playerState .= ' <b>The buyer was not emailed:</b> ' . bz_h($pl['emailError'] ?? 'unknown error');
+                    $approveButton = $button('resend-approval', 'Send confirmation email');
+                }
+            }
         } elseif ($adId !== '') {
             $playerState = 'It was sent to the player but has since been removed from it.';
         } elseif (!empty($o['player']['error'])) {
@@ -220,7 +266,8 @@ function admin_orders_page(bool $showAll): void
             $playerState = '';
         }
         $playerHtml = ($playerState !== '' ? '<p class="player-state">' . $playerState . '</p>' : '')
-            . ($sendable ? '<form method="post" class="player-send"><button class="btn btn-orange" type="submit" name="send-to-player" value="' . bz_h($row['id']) . '">Send to player</button></form>' : '');
+            . $approveButton
+            . ($sendable ? $button('send-to-player', 'Send to player') : '');
 
         $cards .= '
         <article class="order st-' . bz_h($row['status']) . '">

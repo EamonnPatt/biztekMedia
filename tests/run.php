@@ -135,6 +135,8 @@ $picked = bz_player_pick_media($handoff);
 check('a video is chosen over an image as the ad\'s main file', ($picked['upload']['id'] ?? '') === 'vid1');
 $ad = bz_player_ad_fields($handoff, $picked);
 check('the ad is added paused, so nothing reaches a TV before it is reviewed', $ad['enabled'] === 0);
+check('the ad is added NOT approved, tied to its order, so the TVs hold it back until the Approve button', $ad['approved'] === 0 && $ad['order_id'] === 'BZ-261001-AAAAAA');
+check('the notes start "Biztek order <id>", which the player uses to find ads sent before approvals existed', str_starts_with($ad['notes'], 'Biztek order BZ-261001-AAAAAA'));
 check('it plays from the start date for the booked weeks (8 weeks from Nov 2 ends Dec 27)', $ad['start_date'] === '2026-11-02' && $ad['end_date'] === '2026-12-27');
 check('it is a video ad named after the business, in the spot length', $ad['type'] === 'video' && $ad['title'] === "Joe's Pizza" && $ad['duration'] === 6);
 check('the layer\'s own fit and the studio\'s background colour carry over', $ad['fit'] === 'contain' && $ad['background'] === '#112233');
@@ -148,6 +150,17 @@ $textAd = bz_player_ad_fields($textOnly, bz_player_pick_media($textOnly));
 check('a text-only order becomes a text slide: first line the headline, the rest the body', $textAd['type'] === 'text' && $textAd['headline'] === 'Fresh Bagels' && $textAd['body'] === 'Daily at 7am' && $textAd['text_color'] === '#00ff00');
 $bad = bz_player_ad_fields(['id' => 'BZ-261001-CCCCCC', 'campaign' => ['startDate' => '2026-02-31', 'weeks' => 4], 'composition' => ['duration' => 9999, 'background' => ['color1' => 'red'], 'layers' => []]], null);
 check('a bad date, colour or length can\'t get into the player\'s tables', $bad['start_date'] === null && $bad['end_date'] === null && $bad['background'] === '#000000' && $bad['duration'] === 600);
+
+$future = $handoff;
+$future['contact']['name'] = 'Joe';
+$future['campaign']['startDate'] = gmdate('Y-m-d', time() + 30 * 86400);
+$mail = bz_player_approval_text($future);
+check('the approval email greets the buyer, names the order and says the ad is approved', str_contains($mail, 'Hi Joe,') && str_contains($mail, 'BZ-261001-AAAAAA') && str_contains($mail, "it's approved"));
+check('the approval email says when it goes on screen', str_contains($mail, 'goes on screen on ' . DateTimeImmutable::createFromFormat('!Y-m-d', $future['campaign']['startDate'])->format('l, F j, Y')));
+$started = $handoff;
+$started['campaign']['startDate'] = gmdate('Y-m-d', time() - 3 * 86400);
+check('an ad whose start date has passed is described as on screen now', str_contains(bz_player_approval_text($started), 'It is on screen now'));
+check('a demo order\'s email says it was a test', str_contains(bz_player_approval_text($handoff + ['demo' => true]), 'test order') && !str_contains($mail, 'test order'));
 
 /* ---------------------------------------------------------------- deploy */
 
