@@ -16,13 +16,51 @@ declare(strict_types=1);
 
 const BZ_PLAYER_CHUNK = 1048576; // the player stores and serves files in pieces of exactly this size
 
-// A table of the player: its prefix (player_table_prefix, or this site's table_prefix when that isn't set), then tv_.
+// The player's settings from config.php: player_db when the player has its own database, or null when its tables
+// are in this site's database.
+function bz_player_settings(): ?array
+{
+    $p = bz_config()['player_db'];
+    return is_array($p) && !empty($p['db_name']) ? $p : null;
+}
+
+// The database the player keeps its ads in: its own (player_db in config.php), or this site's.
+function bz_player_db(): PDO
+{
+    static $pdo = null;
+    if ($pdo) return $pdo;
+    $p = bz_player_settings();
+    if (!$p) return $pdo = bz_db();
+    $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $p['db_host'] ?? 'localhost', (int) ($p['db_port'] ?? 3306), $p['db_name']);
+    try {
+        $pdo = new PDO($dsn, (string) ($p['db_user'] ?? ''), (string) ($p['db_pass'] ?? ''), [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    } catch (PDOException $e) {
+        error_log('[biztek] player database connection failed: ' . $e->getMessage());
+        $hint = match (preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? $m[1] : '') {
+            '1045' => 'the user or password (db_user, db_pass) is wrong',
+            '1044' => 'the user has no access to that database',
+            '1049' => 'no database has that name (db_name)',
+            '2002', '2005' => "the server (db_host) can't be found",
+            default => 'check the details',
+        };
+        throw new HttpError(500, "Couldn't reach the ad player's database: $hint. Copy them from the player's adscreen-private/config.php into player_db in config.php.");
+    }
+    return $pdo;
+}
+
+// A table of the player: its prefix, then tv_. With player_db, the prefix is its table_prefix (blank by default, as in
+// the player); otherwise player_table_prefix, or this site's table_prefix when that isn't set.
 function bz_player_table(string $name): string
 {
     $c = bz_config();
-    $prefix = (string) ($c['player_table_prefix'] ?? $c['table_prefix']);
+    $p = bz_player_settings();
+    $prefix = (string) ($p ? ($p['table_prefix'] ?? '') : ($c['player_table_prefix'] ?? $c['table_prefix']));
     if (!preg_match('/^[A-Za-z0-9_]*$/', $prefix)) {
-        throw new HttpError(500, 'player_table_prefix in config.php may only use letters, numbers and underscores.');
+        throw new HttpError(500, "The ad player's table prefix in config.php may only use letters, numbers and underscores.");
     }
     return '`' . $prefix . 'tv_' . $name . '`';
 }
@@ -165,10 +203,10 @@ function bz_player_ad_states(array $adIds): array
     $adIds = array_values(array_filter(array_unique($adIds), 'is_string'));
     if (!$adIds) return [];
     try {
-        $st = bz_db()->prepare('SELECT id, enabled FROM ' . bz_player_table('ads') . ' WHERE id IN (' . implode(', ', array_fill(0, count($adIds), '?')) . ')');
+        $st = bz_player_db()->prepare('SELECT id, enabled FROM ' . bz_player_table('ads') . ' WHERE id IN (' . implode(', ', array_fill(0, count($adIds), '?')) . ')');
         $st->execute($adIds);
         return array_map('boolval', $st->fetchAll(PDO::FETCH_KEY_PAIR));
-    } catch (PDOException) {
+    } catch (PDOException | HttpError) {
         return [];
     }
 }
@@ -183,7 +221,7 @@ function bz_player_publish(string $orderId): array
     $lock->execute([$lockName]);
     if ((int) $lock->fetchColumn() !== 1) throw new HttpError(409, 'This order is already being sent to the player.');
     try {
-        return bz_player_publish_locked($db, $orderId);
+        return bz_player_publish_locked(bz_player_db(), $orderId);
     } finally {
         $db->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
     }
@@ -231,7 +269,8 @@ function bz_player_publish_locked(PDO $db, string $orderId): array
         if ($db->inTransaction()) $db->rollBack();
         if ($mediaId) bz_player_delete_media($db, $mediaId);
         if ($e->getCode() === '42S02') {
-            throw new HttpError(500, 'The ad player\'s tables don\'t exist yet. Open the player site once so it creates them (then send the order again). Looked for ' . str_replace('`', '', bz_player_table('ads')) . ' in this database; if the player uses another table prefix, set player_table_prefix in config.php.');
+            throw new HttpError(500, "The ad player's tables aren't where this site looked: " . str_replace('`', '', bz_player_table('ads')) . ' in '
+                . (bz_player_settings() ? 'the database in player_db' : "this site's database") . ". Set player_db in config.php to the database and table_prefix from the player's adscreen-private/config.php, then send the order again.");
         }
         throw $e;
     } catch (Throwable $e) {

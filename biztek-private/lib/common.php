@@ -59,6 +59,9 @@ function bz_config(): array
         // Paid orders are copied to the ad player (see player.php). null: the player's tables use table_prefix too.
         'player_publish' => true,
         'player_table_prefix' => null,
+        // The ad player's own database, when it has one: ['db_name' => ..., 'db_user' => ..., 'db_pass' => ...,
+        // 'table_prefix' => ...], copied from the player's adscreen-private/config.php.
+        'player_db' => null,
     ], is_array($loaded) ? $loaded : []);
     if (!preg_match('/^[A-Za-z0-9_]*$/', (string) $config['table_prefix'])) {
         throw new HttpError(500, 'table_prefix in config.php may only use letters, numbers and underscores.');

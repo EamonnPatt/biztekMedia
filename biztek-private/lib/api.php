@@ -302,7 +302,7 @@ function api_confirm(): never
     bz_db()->prepare("UPDATE `$table` SET secret_token = NULL WHERE id = ?")->execute([$order['id']]);
     notify_new_order($order);
     send_order_receipt($order);
-    // Demo orders are never sent on their own: a test order shouldn't reach the TVs. The orders page can send one by hand.
+    // The ad goes to the player paused, so nothing reaches a TV until someone switches it on there.
     bz_player_publish_later($order['id']);
     bz_json(200, ['ok' => true, 'orderId' => $order['id'], 'transactionId' => $order['transaction']['transactionId']]);
 }
@@ -317,6 +317,8 @@ function api_demo_confirm(): never
         save_order_status($order, 'paid-demo', null);
         notify_new_order($order);
         send_order_receipt($order);
+        // Demo orders go to the player too (paused), so a test checks the whole path.
+        bz_player_publish_later($order['id']);
     }
     bz_json(200, ['ok' => true, 'orderId' => $order['id'], 'transactionId' => 'DEMO']);
 }

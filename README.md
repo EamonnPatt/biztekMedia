@@ -125,11 +125,21 @@ Uploaded files live in `biztek-private/storage/uploads`. Watch your hosting disk
 The gym's TVs run a separate site, the ad player, that keeps its ads in the **same database** as this one (tables `bz_tv_ads`, `bz_tv_media` and `bz_tv_media_chunks`). When a customer pays, this site copies their video or image into those tables as a **paused** ad, with their start date, end date and a note of what they booked. It happens right after the payment goes through, without slowing down the checkout. Nothing reaches a TV until you open the player's admin panel, check the ad, set **Plays per loop** to match the booking, and switch it on. That's the review the customer is promised.
 
 - The player shows one video, image or text slide per ad. Only the order's main video (or image) is copied. If the customer's design has more layers (text, shapes), the ad's private notes in the player say how many, and **Download full layout (JSON)** on the orders page has them. A text-only order becomes a text slide.
-- On the orders page each order shows where its ad is: **On the player, paused**, **live**, or **Not sent** with the reason. A **Send to player** button appears when it isn't there, to retry a failure or to send a demo order. Demo orders are never sent on their own, so a test can't reach the TVs. Sending the same order twice is refused.
+- On the orders page each order shows where its ad is: **On the player, paused**, **live**, or **Not sent** with the reason. A **Send to player** button appears when it isn't there, to retry a failure. Demo orders are sent too, so a test checks the whole path; like every order they arrive paused, and their notes in the player say DEMO. Sending the same order twice is refused.
 - The player creates its tables the first time its site is opened. If it never has been, the order says so; open the player once and press **Send to player**.
-- Two optional settings in `config.php`:
+- **If the player has its own database** (it's set in the player's `adscreen-private/config.php`), copy its database details into this site's `config.php`. Without this, ads are written to this site's database, where the player never looks:
+  ```php
+  'player_db' => [
+      'db_name' => 'the player's db_name',
+      'db_user' => 'the player's db_user',
+      'db_pass' => 'the player's db_pass',
+      'table_prefix' => '',   // the player's table_prefix (blank unless its config.php sets one)
+  ],
+  ```
+  `db_host` defaults to `localhost`, which works when both sites are on the same cPanel account.
+- Two other optional settings in `config.php`:
   - `'player_publish' => false` turns the automatic send off (the button still works).
-  - `'player_table_prefix' => 'xx_'` is for a player whose tables don't start with the same prefix as this site's `table_prefix`.
+  - `'player_table_prefix' => 'xx_'` is for a player that shares this site's database but whose tables don't start with this site's `table_prefix`.
 - Videos are copied into the database, so mind its size. Uploads on this site stay in `biztek-private/storage/uploads` as well.
 
 ## Change prices

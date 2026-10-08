@@ -214,10 +214,10 @@ function admin_orders_page(bool $showAll): void
             $playerState = 'It was sent to the player but has since been removed from it.';
         } elseif (!empty($o['player']['error'])) {
             $playerState = '<b>Not sent:</b> ' . bz_h($o['player']['error']);
-        } elseif ($row['status'] === 'paid') {
+        } elseif (in_array($row['status'], ['paid', 'paid-demo'], true)) {
             $playerState = 'Not on the player yet.';
         } else {
-            $playerState = $row['status'] === 'paid-demo' ? 'A demo order: it is only sent to the player when you press the button.' : '';
+            $playerState = '';
         }
         $playerHtml = ($playerState !== '' ? '<p class="player-state">' . $playerState . '</p>' : '')
             . ($sendable ? '<form method="post" class="player-send"><button class="btn btn-orange" type="submit" name="send-to-player" value="' . bz_h($row['id']) . '">Send to player</button></form>' : '');
