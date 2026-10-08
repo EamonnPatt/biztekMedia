@@ -52,6 +52,13 @@ function bz_config(): array
         'from_email' => '',
         'timezone' => 'America/Toronto',
         'max_upload_mb' => 250,
+        // true turns on demo mode while keeping the Helcim token, for testing on the live site.
+        'demo' => false,
+        // A file path: emails are written there instead of sent. For testing on a computer that can't send email.
+        'mail_log' => '',
+        // Paid orders are copied to the ad player (see player.php). null: the player's tables use table_prefix too.
+        'player_publish' => true,
+        'player_table_prefix' => null,
     ], is_array($loaded) ? $loaded : []);
     if (!preg_match('/^[A-Za-z0-9_]*$/', (string) $config['table_prefix'])) {
         throw new HttpError(500, 'table_prefix in config.php may only use letters, numbers and underscores.');
@@ -59,9 +66,10 @@ function bz_config(): array
     return $config;
 }
 
+// Demo mode: checkout completes but no card is charged. On when 'demo' => true, or when there's no Helcim token.
 function bz_demo(): bool
 {
-    return trim((string) bz_config()['helcim_api_token']) === '';
+    return bz_config()['demo'] === true || trim((string) bz_config()['helcim_api_token']) === '';
 }
 
 // Calls Helcim's API with the token from config.php.

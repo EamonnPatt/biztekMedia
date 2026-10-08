@@ -8,6 +8,7 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/common.php';
+require __DIR__ . '/player.php';
 
 function bz_admin(): void
 {
@@ -65,6 +66,10 @@ function admin_route(): void
     }
     session_write_close(); // don't hold the session lock during long downloads
 
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send-to-player'])) {
+        admin_send_to_player((string) $_POST['send-to-player']);
+        return;
+    }
     if (isset($_GET['download'])) {
         admin_download((string) $_GET['download']);
         return;
@@ -104,6 +109,24 @@ function admin_helcim_check(): void
             . '<p class="muted">Check that <code>helcim_api_token</code> in config.php is copied exactly, and that the token has permission to process transactions (Helcim → Integrations → API Access).</p>';
     }
     admin_shell('Helcim check', '<h1>Helcim check</h1>' . $result . $back);
+}
+
+// Copies an order's ad to the ad player, paused, and says what happened.
+function admin_send_to_player(string $orderId): void
+{
+    $back = '<p><a class="btn btn-orange" href="admin.php">Back to orders</a></p>';
+    @set_time_limit(0);
+    try {
+        $r = bz_player_publish($orderId);
+        $result = '<p class="notice"><b>Sent.</b> The ad is on the player, <b>paused</b>. Open the player\'s admin panel, check it, set how often it plays, and switch it on. It will run from the order\'s start date.</p>';
+    } catch (HttpError $e) {
+        $result = '<p class="notice"><b>Not sent.</b> ' . bz_h($e->getMessage()) . '</p>';
+    } catch (Throwable $e) {
+        error_log('[biztek] ' . $e);
+        bz_player_record($orderId, ['error' => bz_cut($e->getMessage(), 400), 'at' => gmdate('c')]);
+        $result = '<p class="notice"><b>Not sent.</b> The database refused it. Check the PHP error log for details.</p>';
+    }
+    admin_shell('Send to player', '<h1>Send to player</h1>' . $result . $back);
 }
 
 function admin_download(string $id): void
@@ -163,6 +186,9 @@ function admin_orders_page(bool $showAll): void
     $when = fn(?string $utc) => $utc ? (new DateTime($utc, new DateTimeZone('UTC')))->setTimezone($tz)->format('M j, Y g:i a') : '';
     $size = fn(int $b) => $b > 1048576 ? number_format($b / 1048576, 1) . ' MB' : max(1, (int) round($b / 1024)) . ' KB';
 
+    // Where each order's ad is on the player: id => switched on?
+    $onPlayer = bz_player_ad_states(array_map(fn($r) => (json_decode($r['data'], true)['player']['adId'] ?? null), $rows));
+
     $cards = '';
     foreach ($rows as $row) {
         $o = json_decode($row['data'], true) ?: [];
@@ -180,6 +206,22 @@ function admin_orders_page(bool $showAll): void
         $site = (string) ($c['website'] ?? '');
         $siteUrl = preg_match('~^https?://~i', $site) ? $site : 'https://' . $site;
 
+        $adId = (string) ($o['player']['adId'] ?? '');
+        $sendable = in_array($row['status'], ['paid', 'paid-demo'], true) && ($adId === '' || !isset($onPlayer[$adId]));
+        if ($adId !== '' && isset($onPlayer[$adId])) {
+            $playerState = $onPlayer[$adId] ? '<b>On the player, live.</b>' : '<b>On the player, paused.</b> Switch it on in the player\'s admin panel.';
+        } elseif ($adId !== '') {
+            $playerState = 'It was sent to the player but has since been removed from it.';
+        } elseif (!empty($o['player']['error'])) {
+            $playerState = '<b>Not sent:</b> ' . bz_h($o['player']['error']);
+        } elseif ($row['status'] === 'paid') {
+            $playerState = 'Not on the player yet.';
+        } else {
+            $playerState = $row['status'] === 'paid-demo' ? 'A demo order: it is only sent to the player when you press the button.' : '';
+        }
+        $playerHtml = ($playerState !== '' ? '<p class="player-state">' . $playerState . '</p>' : '')
+            . ($sendable ? '<form method="post" class="player-send"><button class="btn btn-orange" type="submit" name="send-to-player" value="' . bz_h($row['id']) . '">Send to player</button></form>' : '');
+
         $cards .= '
         <article class="order st-' . bz_h($row['status']) . '">
           <header>
@@ -194,7 +236,7 @@ function admin_orders_page(bool $showAll): void
             <section><h3>Schedule</h3><p>' . bz_h($k['startDate'] ?? '') . ' → ' . bz_h($end) . ' <span class="muted">(' . bz_h($k['weeks'] ?? '') . ' wk)</span><br>' . $where . '<br>'
                 . ($addons ?: '<span class="muted">No add-ons</span>') . '</p></section>
             <section><h3>Ad</h3><p>' . bz_h($p['formats'][$k['format'] ?? '']['label'] ?? '') . ' · ' . bz_h($comp['duration'] ?? '') . 's · ' . bz_h($comp['orientation'] ?? '') . ' · ' . count($comp['layers'] ?? []) . ' layers<br>'
-                . ($media ?: '<span class="muted">No media files</span>') . '<br><a href="admin.php?order=' . bz_h($row['id']) . '">Download full layout (JSON)</a></p></section>
+                . ($media ?: '<span class="muted">No media files</span>') . '<br><a href="admin.php?order=' . bz_h($row['id']) . '">Download full layout (JSON)</a></p>' . $playerHtml . '</section>
           </div>
           <footer class="muted">Created ' . bz_h($when($row['created_at'])) . ($row['paid_at'] ? ' · paid ' . bz_h($when($row['paid_at'])) : '') . $txn . '</footer>
         </article>';
@@ -230,5 +272,7 @@ const ADMIN_CSS = '
   h3 { margin: 0 0 6px; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .grid p { margin: 0; font-size: 14.5px; }
   .notes { margin-top: 8px !important; padding: 8px 10px; background: var(--cream-deep); border-radius: 8px; white-space: pre-wrap; }
+  .player-state { margin-top: 10px !important; padding: 8px 10px; background: var(--cream-deep); border-radius: 8px; }
+  .player-send { margin-top: 8px; }
   .order footer { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
 ';

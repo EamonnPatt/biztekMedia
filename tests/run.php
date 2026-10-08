@@ -105,6 +105,50 @@ check('a whole-dollar payment is accepted', helcim_signature_ok(json_decode($who
 check('a payment with a changed amount is rejected', !helcim_signature_ok(['amount' => 1.0] + $txn, $sign($raw), $secret));
 check('a payment signed with another secret is rejected', !helcim_signature_ok($txn, $sign($raw, 'someone-elses-secret'), $secret));
 
+/* ---------------------------------------------------------------- demo mode */
+
+section('Demo mode');
+check('with no Helcim token the site is in demo mode', bz_demo());
+
+/* ---------------------------------------------------------------- order emails */
+
+section('Order emails');
+check('new orders are emailed to every address in notify_email', notify_recipients('contact@northumberlandfitness.com, anthony@biztekmedia.ca') === ['contact@northumberlandfitness.com', 'anthony@biztekmedia.ca']);
+check('a list, repeats and bad addresses in notify_email are handled', notify_recipients(['a@example.com', ' a@example.com', 'not an email', '']) === ['a@example.com']);
+check('a blank notify_email sends no order emails', notify_recipients('') === []);
+
+/* ---------------------------------------------------------------- ad player */
+
+section('Ad player hand-off');
+$handoff = [
+    'id' => 'BZ-261001-AAAAAA', 'status' => 'paid',
+    'contact' => ['business' => "Joe's Pizza", 'name' => 'Joe', 'email' => 'joe@example.com'],
+    'campaign' => ['every' => 2, 'weeks' => 8, 'startDate' => '2026-11-02'],
+    'composition' => ['orientation' => 'portrait', 'duration' => 6, 'background' => ['color1' => '#112233'], 'layers' => [
+        ['type' => 'text', 'text' => 'Now open!', 'color' => '#ff0000'],
+        ['type' => 'image', 'uploadId' => 'img1'],
+        ['type' => 'video', 'uploadId' => 'vid1', 'fit' => 'contain'],
+    ]],
+    'uploads' => [['id' => 'img1', 'kind' => 'image', 'type' => 'image/png'], ['id' => 'vid1', 'kind' => 'video', 'type' => 'video/mp4']],
+];
+$picked = bz_player_pick_media($handoff);
+check('a video is chosen over an image as the ad\'s main file', ($picked['upload']['id'] ?? '') === 'vid1');
+$ad = bz_player_ad_fields($handoff, $picked);
+check('the ad is added paused, so nothing reaches a TV before it is reviewed', $ad['enabled'] === 0);
+check('it plays from the start date for the booked weeks (8 weeks from Nov 2 ends Dec 27)', $ad['start_date'] === '2026-11-02' && $ad['end_date'] === '2026-12-27');
+check('it is a video ad named after the business, in the spot length', $ad['type'] === 'video' && $ad['title'] === "Joe's Pizza" && $ad['duration'] === 6);
+check('the layer\'s own fit and the studio\'s background colour carry over', $ad['fit'] === 'contain' && $ad['background'] === '#112233');
+check('the notes name the order and the layers the player can\'t show', str_contains($ad['notes'], 'BZ-261001-AAAAAA') && str_contains($ad['notes'], '2 more layers'));
+$onlyImage = $handoff;
+$onlyImage['composition']['layers'] = [['type' => 'image', 'uploadId' => 'img1']];
+check('with no video, the image is the main file', (bz_player_pick_media($onlyImage)['upload']['id'] ?? '') === 'img1');
+$textOnly = ['id' => 'BZ-261001-BBBBBB', 'status' => 'paid', 'contact' => ['business' => 'Bagels'], 'campaign' => ['weeks' => 4, 'startDate' => '2026-11-02'],
+    'composition' => ['layers' => [['type' => 'text', 'text' => 'Fresh Bagels', 'color' => '#00ff00'], ['type' => 'text', 'text' => 'Daily at 7am']]]];
+$textAd = bz_player_ad_fields($textOnly, bz_player_pick_media($textOnly));
+check('a text-only order becomes a text slide: first line the headline, the rest the body', $textAd['type'] === 'text' && $textAd['headline'] === 'Fresh Bagels' && $textAd['body'] === 'Daily at 7am' && $textAd['text_color'] === '#00ff00');
+$bad = bz_player_ad_fields(['id' => 'BZ-261001-CCCCCC', 'campaign' => ['startDate' => '2026-02-31', 'weeks' => 4], 'composition' => ['duration' => 9999, 'background' => ['color1' => 'red'], 'layers' => []]], null);
+check('a bad date, colour or length can\'t get into the player\'s tables', $bad['start_date'] === null && $bad['end_date'] === null && $bad['background'] === '#000000' && $bad['duration'] === 600);
+
 /* ---------------------------------------------------------------- deploy */
 
 section('Deploy');

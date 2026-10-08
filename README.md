@@ -47,7 +47,8 @@ return [
 Then fill in:
 - `db_name`, `db_user`, `db_pass`: the full names from step 1, exactly as cPanel shows them. Capitals count.
 - `admin_password`: the password for your orders page.
-- `notify_email`: where new orders are emailed. Optional.
+- `notify_email`: where new orders are emailed. Separate several addresses with commas, such as `'contact@northumberlandfitness.com, anthony@biztekmedia.ca'`. Each gets its own email. Optional.
+- `mail_log`: a file path. Emails are written there instead of being sent, for testing on a computer that can't send email. Leave it out on the live site.
 - `from_email`: an address on your own domain, such as `info@biztekmedia.ca`. Order emails and customer receipts come from it, and customers reply to it.
 - Leave `helcim_api_token` empty for now, so the site runs in demo mode.
 
@@ -68,6 +69,8 @@ The database tables and the `storage` folder are created automatically on first 
 - Open `yourdomain.com/admin.php`, sign in, and you'll see the order with download links for its files.
 
 **7. Go live.** Put your Helcim API token in `config.php` as `helcim_api_token`. You get it from Helcim → Integrations → API Access, with permission to process transactions. The next checkout opens Helcim's real card form.
+
+To test on the live site later without charging cards, add `'demo' => true,` to `config.php`. Checkouts then complete without payment and orders are marked demo, while your Helcim token stays in place. Remove it (or set it to `false`) to take payments again.
 - On the orders page, click **Test Helcim connection**. It opens a $1.00 checkout session, as every real checkout does, and tells you whether Helcim accepted your token. Nothing is charged.
 - Place one real order with your own card, check it appears on the orders page as **paid** and that the receipt email arrives, then refund it in Helcim.
 
@@ -113,9 +116,21 @@ To publish later changes: push to GitHub, then in cPanel click **Update from Rem
 - a download link for each video or image
 - a download of the full ad layout: every layer's position, timing and animation, as JSON
 
-Each customer is emailed a receipt when they pay: order number, campaign, price breakdown, card and transaction, and what happens next. With `notify_email` set, each new order is also emailed to you. If emails don't arrive, check spam, make sure `from_email` is an address on your own domain, and turn on SPF and DKIM in cPanel → **Email Deliverability**.
+Each customer is emailed a receipt when they pay: order number, campaign, price breakdown, card and transaction, and what happens next. With `notify_email` set, each new order is also emailed to every address in it. If emails don't arrive, check spam, make sure `from_email` is an address on your own domain, and turn on SPF and DKIM in cPanel → **Email Deliverability**.
 
 Uploaded files live in `biztek-private/storage/uploads`. Watch your hosting disk space; `max_upload_mb` in `config.php` caps each file. Uploads that were started but never finished are cleaned up after a day.
+
+## Sending ads to the ad player
+
+The gym's TVs run a separate site, the ad player, that keeps its ads in the **same database** as this one (tables `bz_tv_ads`, `bz_tv_media` and `bz_tv_media_chunks`). When a customer pays, this site copies their video or image into those tables as a **paused** ad, with their start date, end date and a note of what they booked. It happens right after the payment goes through, without slowing down the checkout. Nothing reaches a TV until you open the player's admin panel, check the ad, set **Plays per loop** to match the booking, and switch it on. That's the review the customer is promised.
+
+- The player shows one video, image or text slide per ad. Only the order's main video (or image) is copied. If the customer's design has more layers (text, shapes), the ad's private notes in the player say how many, and **Download full layout (JSON)** on the orders page has them. A text-only order becomes a text slide.
+- On the orders page each order shows where its ad is: **On the player, paused**, **live**, or **Not sent** with the reason. A **Send to player** button appears when it isn't there, to retry a failure or to send a demo order. Demo orders are never sent on their own, so a test can't reach the TVs. Sending the same order twice is refused.
+- The player creates its tables the first time its site is opened. If it never has been, the order says so; open the player once and press **Send to player**.
+- Two optional settings in `config.php`:
+  - `'player_publish' => false` turns the automatic send off (the button still works).
+  - `'player_table_prefix' => 'xx_'` is for a player whose tables don't start with the same prefix as this site's `table_prefix`.
+- Videos are copied into the database, so mind its size. Uploads on this site stay in `biztek-private/storage/uploads` as well.
 
 ## Change prices
 

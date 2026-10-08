@@ -13,6 +13,7 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/common.php';
+require __DIR__ . '/player.php';
 
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const UPLOADS_PER_HOUR_PER_IP = 40;
@@ -301,6 +302,8 @@ function api_confirm(): never
     bz_db()->prepare("UPDATE `$table` SET secret_token = NULL WHERE id = ?")->execute([$order['id']]);
     notify_new_order($order);
     send_order_receipt($order);
+    // Demo orders are never sent on their own: a test order shouldn't reach the TVs. The orders page can send one by hand.
+    bz_player_publish_later($order['id']);
     bz_json(200, ['ok' => true, 'orderId' => $order['id'], 'transactionId' => $order['transaction']['transactionId']]);
 }
 
@@ -425,11 +428,19 @@ function clean_composition(mixed $c): array
 
 /* ---------------------------------------------------------------- email */
 
+// The valid addresses in notify_email: one address, several separated by commas, or a list.
+function notify_recipients(mixed $setting): array
+{
+    $list = is_array($setting) ? $setting : explode(',', (string) $setting);
+    $valid = array_filter(array_map(fn($a) => trim((string) $a), $list), fn($a) => filter_var($a, FILTER_VALIDATE_EMAIL) !== false);
+    return array_values(array_unique($valid));
+}
+
 // Tells Biztek about a new order. Needs notify_email in config.php; failures never block the order.
 function notify_new_order(array $order): void
 {
-    $to = trim((string) bz_config()['notify_email']);
-    if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
+    $recipients = notify_recipients(bz_config()['notify_email']);
+    if (!$recipients) return;
 
     $p = bz_pricing()->config;
     $c = $order['contact'];
@@ -447,8 +458,11 @@ function notify_new_order(array $order): void
         . "Ad: " . ($p['formats'][$k['format']]['label'] ?? $k['format']) . ", {$k['duration']}s\nFiles:\n$files\n\n"
         . "Review it: " . bz_site_url() . "/admin.php\n";
 
-    if (!bz_mail($to, "New ad order {$order['id']} from {$c['business']}$demo", $body, $c['email'])) {
-        error_log("[biztek] could not send the order email for {$order['id']}");
+    // One email each, so a problem with one address doesn't stop the others.
+    foreach ($recipients as $to) {
+        if (!bz_mail($to, "New ad order {$order['id']} from {$c['business']}$demo", $body, $c['email'])) {
+            error_log("[biztek] could not send the order email for {$order['id']} to $to");
+        }
     }
 }
 
@@ -522,6 +536,12 @@ function bz_mail(string $to, string $subject, string $body, ?string $replyTo = n
     if (!$valid) $from = 'no-reply@' . preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
     $headers = "From: Biztek Media <$from>\r\n" . ($replyTo ? "Reply-To: $replyTo\r\n" : '') . 'Content-Type: text/plain; charset=UTF-8';
+    // For testing on a computer that can't send email: write it to a file instead.
+    $log = trim((string) bz_config()['mail_log']);
+    if ($log !== '') {
+        $entry = str_repeat('=', 72) . "\nDate: " . date('r') . "\nTo: $to\nSubject: $subject\n$headers\n\n$body\n\n";
+        return file_put_contents($log, $entry, FILE_APPEND | LOCK_EX) !== false;
+    }
     // -f sets the bounce address to from_email too, which helps the mail pass spam checks.
     return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers, $valid ? '-f' . $from : '');
 }
